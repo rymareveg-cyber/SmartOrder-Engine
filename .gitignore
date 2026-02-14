@@ -41,3 +41,6 @@ tmp/
 
 # Docker (опционально, если не хотите коммитить)
 # docker-compose.override.yml
+
+# Инструкции для агента (не коммитить)
+AGENTS.md
