@@ -38,6 +38,40 @@
 - `CACHE_TTL=300`
 - `LOG_LEVEL=INFO`
 
+#### Примеры переменных окружения для VPS
+
+**Если Redis создан как сервис Dokploy:**
+```
+REDIS_URL=redis://:your-password@smartorder-redis:6379/0
+```
+
+**Если Redis создан как сервис Dokploy без пароля:**
+```
+REDIS_URL=redis://smartorder-redis:6379/0
+```
+
+**Если PostgreSQL создан как сервис Dokploy:**
+```
+DATABASE_URL=postgresql://user:password@postgres:5432/smartorder
+```
+
+**Если PostgreSQL на хосте VPS:**
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/smartorder
+```
+
+**Если 1С на внешнем сервере:**
+```
+ONEC_BASE_URL=http://192.168.1.100:80
+# или
+ONEC_BASE_URL=http://1c-server.example.com:80
+```
+
+**Важно:** 
+- Имена сервисов (`smartorder-redis`, `postgres`) должны совпадать с именами, указанными при создании в Dokploy (поле "Name")
+- Если сервисы на хосте VPS, используйте `localhost` вместо имени сервиса
+- Если пароль содержит специальные символы (@, #, %, &), их нужно URL-кодировать
+
 **Для Telegram бота (если запускаете отдельно):**
 - `TELEGRAM_BOT_TOKEN` - токен бота от @BotFather
 - `TELEGRAM_ADMIN_ID` - ID администратора
