@@ -25,7 +25,7 @@ CREATE INDEX IF NOT EXISTS idx_products_stock ON products(stock) WHERE stock > 0
 CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING gin(name gin_trgm_ops);
 
 -- Комментарии к таблице и полям
-COMMENT ON TABLE products IS 'Каталог товаров из 1С:Управление небольшой фирмой';
+COMMENT ON TABLE products IS 'Каталог товаров из 1С:Управление нашей фирмой';
 COMMENT ON COLUMN products.id IS 'Уникальный идентификатор товара (UUID)';
 COMMENT ON COLUMN products.articul IS 'Артикул товара (уникальный идентификатор из 1С)';
 COMMENT ON COLUMN products.name IS 'Наименование товара';

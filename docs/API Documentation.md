@@ -382,7 +382,6 @@ curl -X GET "http://localhost:8025/api/orders?status=paid&date_from=2026-02-01&p
   "paid_at": "2026-02-13T10:45:00Z",
   "shipped_at": "2026-02-13T11:00:00Z",
   "invoice_exported_to_1c": true,
-  "order_exported_to_1c": true,
   "status_history": [
     {
       "status": "new",
@@ -468,7 +467,54 @@ curl -X PATCH "http://localhost:8025/api/orders/660e8400-e29b-41d4-a716-44665544
 
 ---
 
-### 2.5. Получить товары заказа
+### 2.5. Получить заказы по телефону
+
+**GET** `/api/orders/by-phone`
+
+Получить все заказы пользователя по номеру телефона. Используется для Mini App и отслеживания заказов из всех каналов.
+
+**Query параметры:**
+- `phone` (required) - номер телефона (любой формат, будет нормализован)
+- `telegram_user_id` (optional) - Telegram user ID для проверки безопасности (опционально)
+
+**Response 200 OK:**
+```json
+{
+  "phone": "+79991234567",
+  "normalized_phone": "+79991234567",
+  "orders": [
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440000",
+      "order_number": "ORD-2026-0001",
+      "status": "paid",
+      "channel": "telegram",
+      "customer_name": "Иван Иванов",
+      "customer_phone": "+79991234567",
+      "customer_address": "Москва, ул. Ленина, д. 1",
+      "total_amount": 200300.00,
+      "delivery_cost": 500.00,
+      "tracking_number": "TRACK-20260213-123456",
+      "created_at": "2026-02-13T10:30:00Z",
+      "updated_at": "2026-02-13T11:00:00Z",
+      "paid_at": "2026-02-13T10:45:00Z",
+      "shipped_at": "2026-02-13T11:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Пример запроса:**
+```bash
+curl -X GET "http://localhost:8025/api/orders/by-phone?phone=+79991234567" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Примечание:** Телефон автоматически нормализуется к формату `+7XXXXXXXXXX`. Заказы возвращаются из всех каналов (Telegram, Яндекс.Почта, Яндекс.Формы).
+
+---
+
+### 2.6. Получить товары заказа
 
 **GET** `/api/orders/{order_id}/items`
 
@@ -499,6 +545,49 @@ curl -X PATCH "http://localhost:8025/api/orders/660e8400-e29b-41d4-a716-44665544
 curl -X GET "http://localhost:8025/api/orders/660e8400-e29b-41d4-a716-446655440000/items" \
   -H "Authorization: Bearer <token>"
 ```
+
+---
+
+### 2.7. Health Check для Orders API
+
+**GET** `/api/orders/health`
+
+Проверка состояния сервиса Orders API и подключения к базе данных.
+
+**Response 200 OK:**
+```json
+{
+  "status": "ok",
+  "database": "ok",
+  "service": "orders_api"
+}
+```
+
+**Response 200 OK (degraded):**
+```json
+{
+  "status": "degraded",
+  "database": "error",
+  "service": "orders_api"
+}
+```
+
+**Пример запроса:**
+```bash
+curl -X GET "http://localhost:8025/api/orders/health"
+```
+
+**Примечание:** Этот endpoint не требует аутентификации и используется для мониторинга.
+
+---
+
+### 2.8. Swagger документация для Orders API
+
+**GET** `/api/orders/docs`
+
+Перенаправление на корневую Swagger документацию (`/docs`).
+
+**Примечание:** Swagger документация для всех API endpoints доступна по адресу `http://localhost:8025/docs` на корневом уровне.
 
 ---
 
@@ -556,14 +645,16 @@ curl -X POST "http://localhost:8025/api/delivery/calculate" \
 
 ### 4.1. Обработать оплату
 
-**POST** `/api/payments/process`
+**POST** `/api/payments/process/{order_id}`
 
 Обработать оплату заказа (fake система).
+
+**Path параметры:**
+- `order_id` - UUID заказа
 
 **Request Body:**
 ```json
 {
-  "order_id": "660e8400-e29b-41d4-a716-446655440000",
   "card": {
     "number": "4111111111111111",
     "cvv": "123",
@@ -597,11 +688,10 @@ curl -X POST "http://localhost:8025/api/delivery/calculate" \
 
 **Пример запроса:**
 ```bash
-curl -X POST "http://localhost:8025/api/payments/process" \
+curl -X POST "http://localhost:8025/api/payments/process/660e8400-e29b-41d4-a716-446655440000" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "order_id": "660e8400-e29b-41d4-a716-446655440000",
     "card": {
       "number": "4111111111111111",
       "cvv": "123",
@@ -700,6 +790,13 @@ curl -X GET "http://localhost:8025/api/invoices/660e8400-e29b-41d4-a716-44665544
 
 Получить статистику для dashboard.
 
+**Примечание:** Dashboard API работает на порту **8028**, а не 8025.
+
+**Базовый URL для Dashboard:**
+```
+Development: http://localhost:8028
+```
+
 **Query параметры:**
 - `period` (optional) - период (today, week, month, year, default: today)
 - `date_from` (optional) - дата начала (ISO 8601)
@@ -738,7 +835,7 @@ curl -X GET "http://localhost:8025/api/invoices/660e8400-e29b-41d4-a716-44665544
 
 **Пример запроса:**
 ```bash
-curl -X GET "http://localhost:8025/api/dashboard/stats?period=week" \
+curl -X GET "http://localhost:8028/api/dashboard/stats?period=week" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -764,9 +861,11 @@ curl -X GET "http://localhost:8025/api/dashboard/stats?period=week" \
 
 **Пример запроса:**
 ```bash
-curl -X GET "http://localhost:8025/api/dashboard/sync-status" \
+curl -X GET "http://localhost:8028/api/dashboard/sync-status" \
   -H "Authorization: Bearer <token>"
 ```
+
+**Примечание:** Swagger документация для Dashboard API доступна по адресу `http://localhost:8028/docs`.
 
 ---
 
@@ -856,8 +955,7 @@ curl -X POST "http://localhost:8025/webhook/yandex-forms" \
   "updated_at": "ISO 8601",
   "paid_at": "ISO 8601 (nullable)",
   "shipped_at": "ISO 8601 (nullable)",
-  "invoice_exported_to_1c": "boolean",
-  "order_exported_to_1c": "boolean"
+  "invoice_exported_to_1c": "boolean"
 }
 ```
 
@@ -980,11 +1078,10 @@ curl -X GET "http://localhost:8025/api/invoices/{order_id}" \
   -H "Authorization: Bearer <token>"
 
 # 5. Оплата
-curl -X POST "http://localhost:8025/api/payments/process" \
+curl -X POST "http://localhost:8025/api/payments/process/{order_id}" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "order_id": "{order_id}",
     "card": {"number": "4111111111111111", "cvv": "123", "expiry": "12/25", "holder_name": "IVAN IVANOV"}
   }'
 ```

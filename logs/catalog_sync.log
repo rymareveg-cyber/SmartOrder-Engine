@@ -1,0 +1,135 @@
+2026-02-13 21:56:21,578 - __main__ - ERROR - Failed to initialize database pool: connection to server at "localhost" (::1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+connection to server at "localhost" (127.0.0.1), port 5432 failed: Connection refused (0x0000274D/10061)
+	Is the server running on that host and accepting TCP/IP connections?
+
+2026-02-13 21:58:23,546 - __main__ - INFO - Database connection pool initialized
+2026-02-13 21:58:23,546 - __main__ - INFO - Starting catalog synchronization
+2026-02-13 21:58:23,546 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-13 21:58:23,547 - __main__ - ERROR - {"level": "ERROR", "event": "catalog_sync_error", "timestamp": "2026-02-13T13:58:23.547957Z", "error": "'latin-1' codec can't encode characters in position 0-12: ordinal not in range(256)", "duration_seconds": 0.0}
+2026-02-13 22:00:10,160 - __main__ - INFO - Database connection pool initialized
+2026-02-13 22:00:10,160 - __main__ - INFO - Starting catalog synchronization
+2026-02-13 22:00:10,160 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-13 22:00:10,781 - __main__ - INFO - Received 143 products from 1C
+2026-02-13 22:00:10,783 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-13 22:00:10,860 - __main__ - INFO - Saved products: 143 created, 0 updated
+2026-02-13 22:00:10,860 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-13T14:00:10.860997+00:00", "products_total": 143, "products_updated": 0, "products_created": 143, "duration_seconds": 0.7}
+2026-02-13 22:30:12,214 - __main__ - INFO - Database connection pool initialized
+2026-02-13 22:30:12,214 - __main__ - INFO - Starting scheduler with interval: 3 minutes
+2026-02-13 22:30:12,214 - __main__ - INFO - Starting catalog synchronization
+2026-02-13 22:30:12,214 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-13 22:30:36,039 - __main__ - INFO - Received 143 products from 1C
+2026-02-13 22:30:36,040 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-13 22:30:36,217 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-13 22:30:36,217 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-13T14:30:36.217738+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 24.0}
+2026-02-13 22:30:36,223 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-13 22:30:36,225 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-13 22:30:36,225 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-13 22:33:36,231 - apscheduler.executors.default - INFO - Running job "Catalog synchronization from 1C (trigger: interval[0:03:00], next run at: 2026-02-13 22:33:36 +08)" (scheduled at 2026-02-13 22:33:36.223516+08:00)
+2026-02-13 22:33:36,232 - __main__ - INFO - Starting catalog synchronization
+2026-02-13 22:33:36,232 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-13 22:33:36,929 - __main__ - INFO - Received 143 products from 1C
+2026-02-13 22:33:36,931 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-13 22:33:37,005 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-13 22:33:37,006 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-13T14:33:37.006514+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 0.77}
+2026-02-13 22:33:37,006 - apscheduler.executors.default - INFO - Job "Catalog synchronization from 1C (trigger: interval[0:03:00], next run at: 2026-02-13 22:36:36 +08)" executed successfully
+2026-02-15 08:04:44,831 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:04:44,831 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:04:44,831 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:04:44,831 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:05:14,931 - urllib3.connectionpool - WARNING - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPConnectionPool(host='localhost', port=80): Read timed out. (read timeout=30)")': /unf/hs/api/get/catalog/
+2026-02-15 08:05:19,674 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:05:19,680 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:05:19,801 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:05:19,802 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:05:19.802246+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 34.97}
+2026-02-15 08:05:19,808 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:05:19,808 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:05:19,808 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-15 08:09:02,745 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:09:02,745 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:09:02,745 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:09:02,745 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:09:03,393 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:09:03,393 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:09:03,482 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:09:03,482 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:09:03.482345+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 0.74}
+2026-02-15 08:09:03,490 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:09:03,490 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:09:03,490 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-15 08:27:56,253 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:27:56,254 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:27:56,254 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:27:56,254 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:27:57,225 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:27:57,225 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:27:57,348 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:27:57,348 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:27:57.348783+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 1.09}
+2026-02-15 08:27:57,351 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:27:57,354 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:27:57,355 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-15 08:30:19,687 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:30:19,687 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:30:19,687 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:30:19,687 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:30:21,365 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:30:21,366 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:30:21,448 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:30:21,448 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:30:21.448116+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 1.76}
+2026-02-15 08:30:21,448 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:30:21,452 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:30:21,452 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-15 08:33:19,568 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:33:19,568 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:33:19,569 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:33:19,569 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:33:20,368 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:33:20,368 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:33:20,440 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:33:20,440 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:33:20.440577+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 0.87}
+2026-02-15 08:33:20,441 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:33:20,443 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:33:20,443 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-15 08:38:00,380 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:38:00,380 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:38:00,380 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:38:00,380 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:38:00,763 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:38:00,763 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:38:00,836 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:38:00,836 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:38:00.836080+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 0.46}
+2026-02-15 08:38:00,836 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:38:00,836 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:38:00,836 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-15 08:43:36,186 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:43:36,186 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:43:36,186 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:43:36,186 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:43:37,118 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:43:37,118 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:43:37,221 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:43:37,221 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:43:37.221881+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 1.04}
+2026-02-15 08:43:37,221 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:43:37,221 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:43:37,221 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-15 08:56:17,460 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:56:17,461 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:56:17,461 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:56:17,461 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:56:18,669 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:56:18,670 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:56:18,857 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:56:18,858 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:56:18.858661+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 1.4}
+2026-02-15 08:56:18,864 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:56:18,865 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:56:18,865 - apscheduler.scheduler - INFO - Scheduler started
+2026-02-15 08:59:15,879 - __main__ - INFO - Database connection pool initialized
+2026-02-15 08:59:15,879 - __main__ - INFO - Starting scheduler with interval: 30 minutes
+2026-02-15 08:59:15,879 - __main__ - INFO - Starting catalog synchronization
+2026-02-15 08:59:15,879 - __main__ - INFO - Fetching catalog from 1C: http://localhost/unf/hs/api/get/catalog/
+2026-02-15 08:59:16,658 - __main__ - INFO - Received 143 products from 1C
+2026-02-15 08:59:16,658 - __main__ - INFO - Validated 143 out of 143 products
+2026-02-15 08:59:16,773 - __main__ - INFO - Saved products: 0 created, 143 updated
+2026-02-15 08:59:16,773 - __main__ - INFO - {"level": "INFO", "event": "catalog_sync_success", "timestamp": "2026-02-15T00:59:16.773520+00:00", "products_total": 143, "products_updated": 143, "products_created": 0, "duration_seconds": 0.89}
+2026-02-15 08:59:16,779 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-02-15 08:59:16,779 - apscheduler.scheduler - INFO - Added job "Catalog synchronization from 1C" to job store "default"
+2026-02-15 08:59:16,779 - apscheduler.scheduler - INFO - Scheduler started

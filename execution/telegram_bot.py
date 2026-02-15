@@ -15,7 +15,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 import redis
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -112,15 +112,27 @@ async def send_to_queue(message_data: dict) -> bool:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start."""
+    user = update.effective_user
+    
+    # Кнопка для подтверждения телефона
+    keyboard = [
+        [KeyboardButton("📱 Поделиться телефоном", request_contact=True)],
+        [KeyboardButton("📋 Мои заказы")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+    
     welcome_message = (
         "👋 Добро пожаловать в SmartOrder Engine!\n\n"
         "Я помогу вам оформить заказ. Просто напишите, что вы хотите заказать.\n\n"
-        "Например:\n"
+        "**Для отслеживания заказов:**\n"
+        "Поделитесь своим номером телефона, нажав кнопку ниже.\n"
+        "Это позволит вам видеть все ваши заказы из всех каналов (Telegram, почта, формы).\n\n"
+        "**Примеры заказов:**\n"
         "• \"Хочу 2 варочные панели по 120 тысяч\"\n"
         "• \"Нужен товар с артикулом ФР-00000044, количество 1\"\n\n"
         "Используйте /help для получения справки."
     )
-    await update.message.reply_text(welcome_message)
+    await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -130,7 +142,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "**Команды:**\n"
         "• /start - Начать работу с ботом\n"
         "• /help - Показать эту справку\n"
-        "• /status - Проверить статус системы\n\n"
+        "• /status - Проверить статус системы\n"
+        "• /my_orders - Показать мои заказы\n\n"
         "**Как оформить заказ:**\n"
         "Просто напишите сообщение с описанием товара и количеством.\n"
         "Вы можете указать:\n"
@@ -142,6 +155,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• \"Хочу 2 варочные панели\"\n"
         "• \"Заказ: ФР-00000044, количество 1, доставка в Москву\"\n"
         "• \"Нужно 3 шубы норковые по 50000\"\n\n"
+        "**Отслеживание заказов:**\n"
+        "Поделитесь телефоном через кнопку \"📱 Поделиться телефоном\" для отслеживания всех ваших заказов из всех каналов.\n\n"
         "После обработки вашего заказа я отправлю подтверждение."
     )
     await update.message.reply_text(help_message, parse_mode='Markdown')
@@ -177,6 +192,39 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка при проверке статуса системы.")
 
 
+async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик сообщения с контактом (телефоном)."""
+    if not update.message or not update.message.contact:
+        return
+    
+    user = update.effective_user
+    contact = update.message.contact
+    
+    # Проверяем, что контакт принадлежит пользователю
+    if contact.user_id and contact.user_id != user.id:
+        await update.message.reply_text(
+            "❌ Пожалуйста, поделитесь своим номером телефона."
+        )
+        return
+    
+    phone_number = contact.phone_number
+    
+    # Сохраняем связь telegram_user_id -> phone в контексте (или можно сохранить в БД/Redis)
+    # Для простоты сохраняем в context.user_data
+    context.user_data['phone'] = phone_number
+    context.user_data['phone_confirmed'] = True
+    
+    # Отправляем подтверждение
+    confirmation_message = (
+        f"✅ Спасибо! Ваш номер телефона подтверждён: {phone_number}\n\n"
+        "Теперь вы можете отслеживать все свои заказы из всех каналов (Telegram, почта, формы).\n\n"
+        "Используйте команду /my_orders для просмотра ваших заказов."
+    )
+    await update.message.reply_text(confirmation_message)
+    
+    logger.info(f"Phone confirmed for user {user.id}: {phone_number}")
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений."""
     if not update.message or not update.message.text:
@@ -188,15 +236,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not message_text:
         return
     
+    # Обработка кнопки "Мои заказы"
+    if message_text == "📋 Мои заказы":
+        await my_orders_command(update, context)
+        return
+    
     user = update.effective_user
     chat = update.effective_chat
+    
+    # Получаем телефон из контекста (если был подтверждён)
+    phone = context.user_data.get('phone') if context.user_data else None
     
     # Формирование сообщения для очереди
     message_data = {
         "channel": "telegram",
         "user_id": str(user.id) if user else "unknown",
+        "telegram_user_id": user.id if user else None,  # Для связи с заказами
         "chat_id": str(chat.id) if chat else "unknown",
         "message": message_text,
+        "phone": phone,  # Если телефон подтверждён
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "message_id": update.message.message_id
     }
@@ -222,6 +280,77 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Пожалуйста, попробуйте позже или свяжитесь с администратором."
         )
         await update.message.reply_text(error_message)
+
+
+async def my_orders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /my_orders - показать заказы пользователя."""
+    user = update.effective_user
+    
+    # Получаем телефон из контекста
+    phone = context.user_data.get('phone') if context.user_data else None
+    
+    if not phone:
+        await update.message.reply_text(
+            "❌ Для просмотра заказов необходимо поделиться номером телефона.\n\n"
+            "Используйте кнопку \"📱 Поделиться телефоном\" в меню."
+        )
+        return
+    
+    try:
+        # Импорт с поддержкой как относительных, так и абсолютных
+        try:
+            from .crm_service import OrderService
+        except ImportError:
+            import sys
+            from pathlib import Path as PathLib
+            project_root = PathLib(__file__).parent.parent
+            if str(project_root) not in sys.path:
+                sys.path.insert(0, str(project_root))
+            from execution.crm_service import OrderService
+        
+        # Получаем заказы по телефону
+        orders = OrderService.get_orders_by_phone(phone, telegram_user_id=user.id if user else None)
+        
+        if not orders:
+            await update.message.reply_text(
+                "📭 У вас пока нет заказов.\n\n"
+                "Оформите заказ, написав сообщение с описанием товара."
+            )
+            return
+        
+        # Формируем сообщение со списком заказов
+        message_parts = [f"📋 Ваши заказы ({len(orders)}):\n"]
+        
+        for order in orders[:10]:  # Показываем максимум 10 заказов
+            status_emoji = {
+                "new": "🆕",
+                "validated": "✅",
+                "invoice_created": "📄",
+                "paid": "💳",
+                "shipped": "📦",
+                "cancelled": "❌"
+            }.get(order.status, "❓")
+            
+            message_parts.append(
+                f"{status_emoji} {order.order_number}\n"
+                f"   Статус: {order.status}\n"
+                f"   Сумма: {order.total_amount:.2f}₽\n"
+                f"   Дата: {order.created_at[:10] if order.created_at else 'N/A'}\n"
+            )
+        
+        if len(orders) > 10:
+            message_parts.append(f"\n... и ещё {len(orders) - 10} заказов")
+        
+        message_parts.append("\n💡 Используйте Mini App для детального просмотра заказов.")
+        
+        await update.message.reply_text("\n".join(message_parts))
+        
+    except Exception as e:
+        logger.error(f"Error in my_orders command: {e}", exc_info=True)
+        await update.message.reply_text(
+            "❌ Произошла ошибка при получении заказов.\n\n"
+            "Пожалуйста, попробуйте позже."
+        )
 
 
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -302,6 +431,8 @@ def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("my_orders", my_orders_command))
+    application.add_handler(MessageHandler(filters.CONTACT, handle_contact))  # Обработка контактов
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback_query))
     

@@ -306,12 +306,12 @@ async def process_queue(worker_id: int):
 ```
 
 **Уровень 2:** LLM-агент
-- Логирует: "Принято решение экспортировать заказ ORD-2026-001"
-- Вызывает: `execution/1c_exporter.py export_order ORD-2026-001`
+- Логирует: "Принято решение экспортировать счёт INV-2026-001"
+- Вызывает: `execution/1c_exporter.py export_invoice order_id`
 
 **Уровень 3:** `execution/1c_exporter.py`
 ```python
-def export_order(order_id: str):
+def export_invoice(order_id: str):
     logger.info("export_started", {
         "order_id": order_id,
         "timestamp": datetime.now().isoformat()
@@ -319,18 +319,19 @@ def export_order(order_id: str):
     
     try:
         order = get_order(order_id)
-        data = format_for_1c(order)
+        invoice_data = format_invoice_for_1c(order)
         
         logger.info("1c_request_sent", {
             "order_id": order_id,
-            "endpoint": "/hs/orders",
-            "data_size": len(json.dumps(data))
+            "endpoint": "/hs/invoices",
+            "data_size": len(json.dumps(invoice_data))
         })
         
-        response = requests.post(f"{ONEC_URL}/hs/orders", json=data)
+        response = requests.post(f"{ONEC_URL}/hs/invoices", json=invoice_data)
         
         if response.status_code == 200:
             logger.info("export_success", {"order_id": order_id})
+            update_invoice_exported_flag(order_id, True)
         else:
             logger.error("export_failed", {
                 "order_id": order_id,
@@ -506,7 +507,7 @@ def process_payment(order_id: str, card_data: dict):
 
 #### Пример: Изменение требований к формату экспорта в 1С
 
-**Сценарий:** 1С изменил формат API для экспорта заказов.
+**Сценарий:** 1С изменил формат API для экспорта счетов.
 
 **Без архитектуры:**
 - Нужно найти все места, где используется старый формат

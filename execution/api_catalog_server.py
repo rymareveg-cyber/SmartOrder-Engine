@@ -116,11 +116,30 @@ async def lifespan(app: FastAPI):
 
 # Инициализация FastAPI с lifespan
 app = FastAPI(
-    title="SmartOrder Engine - Catalog API",
-    description="API для доступа к каталогу товаров",
+    title="SmartOrder Engine - API",
+    description="API для доступа к каталогу товаров и работы с заказами. Поддерживает поиск, фильтрацию, кэширование через Redis и управление заказами.",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
+
+# Подключение Orders API
+try:
+    # Импортируем router из api_orders
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    
+    # Импортируем router из api_orders
+    from execution.api_orders import router as orders_router
+    # Включаем все роуты из api_orders в основной app
+    app.include_router(orders_router)
+    logger.info("Orders API routes included successfully")
+except Exception as e:
+    logger.warning(f"Could not import orders API: {e}. Orders endpoints will not be available.")
 
 
 def get_cache_key(endpoint: str, **params) -> str:
@@ -154,17 +173,53 @@ def set_to_cache(key: str, value: dict, ttl: int = CACHE_TTL):
         logger.warning(f"Cache set error: {e}")
 
 
-@app.get("/api/catalog", response_model=ProductListResponse)
+@app.get(
+    "/api/catalog",
+    response_model=ProductListResponse,
+    summary="Получить список товаров",
+    description="Возвращает список всех товаров из каталога с поддержкой пагинации и фильтрации",
+    responses={
+        200: {
+            "description": "Список товаров успешно получен",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "items": [
+                            {
+                                "id": "123e4567-e89b-12d3-a456-426614174000",
+                                "articul": "ФР-00000044",
+                                "name": "Варочная панель",
+                                "price": 122334.0,
+                                "stock": 1,
+                                "updated_at": "2026-02-13T10:00:00",
+                                "synced_at": "2026-02-13T10:00:00"
+                            }
+                        ],
+                        "total": 143,
+                        "page": 1,
+                        "page_size": 20,
+                        "pages": 8
+                    }
+                }
+            }
+        },
+        500: {"description": "Внутренняя ошибка сервера"}
+    }
+)
 async def get_catalog(
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(20, ge=1, le=100, description="Размер страницы"),
-    min_stock: Optional[int] = Query(None, ge=0, description="Минимальный остаток"),
-    max_price: Optional[float] = Query(None, ge=0, description="Максимальная цена")
+    page: int = Query(1, ge=1, description="Номер страницы (начиная с 1)"),
+    page_size: int = Query(20, ge=1, le=100, description="Количество товаров на странице (максимум 100)"),
+    min_stock: Optional[int] = Query(None, ge=0, description="Минимальный остаток товара на складе"),
+    max_price: Optional[float] = Query(None, ge=0, description="Максимальная цена товара в рублях")
 ):
     """
     Получить список всех товаров из каталога.
     
-    Поддерживает пагинацию и фильтрацию по остатку и цене.
+    Поддерживает:
+    - Пагинацию (page, page_size)
+    - Фильтрацию по остатку (min_stock)
+    - Фильтрацию по цене (max_price)
+    - Кэширование через Redis (TTL: 5 минут)
     """
     # Проверка кэша
     cache_key = get_cache_key("list", page=page, page_size=page_size, 
@@ -254,20 +309,35 @@ async def get_catalog(
             return_db_connection(conn)
 
 
-@app.get("/api/catalog/search", response_model=ProductListResponse)
+@app.get(
+    "/api/catalog/search",
+    response_model=ProductListResponse,
+    summary="Поиск товаров",
+    description="Поиск товаров по названию или артикулу с поддержкой нечёткого поиска",
+    responses={
+        200: {"description": "Результаты поиска"},
+        400: {"description": "Некорректный запрос (пустой поисковый запрос)"},
+        500: {"description": "Внутренняя ошибка сервера"}
+    }
+)
 async def search_catalog(
-    q: str = Query(..., min_length=1, description="Поисковый запрос"),
-    fuzzy: bool = Query(True, description="Использовать нечёткий поиск"),
-    min_price: Optional[float] = Query(None, ge=0),
-    max_price: Optional[float] = Query(None, ge=0),
-    in_stock: bool = Query(False, description="Только товары в наличии"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100)
+    q: str = Query(..., min_length=1, description="Поисковый запрос (название товара или артикул)"),
+    fuzzy: bool = Query(True, description="Использовать нечёткий поиск (по умолчанию: true)"),
+    min_price: Optional[float] = Query(None, ge=0, description="Минимальная цена товара"),
+    max_price: Optional[float] = Query(None, ge=0, description="Максимальная цена товара"),
+    in_stock: bool = Query(False, description="Показывать только товары в наличии (stock > 0)"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(20, ge=1, le=100, description="Размер страницы")
 ):
     """
     Поиск товаров по названию или артикулу.
     
-    Поддерживает нечёткий поиск и фильтрацию.
+    Поддерживает:
+    - Нечёткий поиск (fuzzy matching)
+    - Фильтрацию по цене (min_price, max_price)
+    - Фильтрацию по наличию (in_stock)
+    - Сортировку по релевантности
+    - Кэширование через Redis
     """
     cache_key = get_cache_key("search", q=q, fuzzy=fuzzy, min_price=min_price,
                               max_price=max_price, in_stock=in_stock,
@@ -457,9 +527,35 @@ async def favicon():
     return Response(status_code=204)
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    summary="Health Check",
+    description="Проверка состояния сервиса и подключений к БД и Redis",
+    responses={
+        200: {
+            "description": "Статус сервиса",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "ok",
+                        "database": "ok",
+                        "redis": "ok"
+                    }
+                }
+            }
+        }
+    }
+)
 async def health_check():
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+    
+    Проверяет:
+    - Подключение к PostgreSQL
+    - Подключение к Redis (опционально)
+    
+    Возвращает статус "ok" если БД доступна, "degraded" если Redis недоступен.
+    """
     try:
         # Проверка БД
         conn = get_db_connection()
