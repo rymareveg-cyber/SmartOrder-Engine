@@ -1,5 +1,0 @@
-2026-02-15 00:52:31,793 - __main__ - INFO - DeliveryCalculator initialized
-2026-02-15 00:52:31,796 - __main__ - INFO - Delivery calculated: Москва (3.0 kg) -> 500 RUB, 1 days
-2026-02-15 00:52:31,796 - __main__ - INFO - Delivery calculated: Санкт-Петербург (7.0 kg) -> 900 RUB, 3 days
-2026-02-15 00:52:31,797 - __main__ - INFO - Delivery calculated: Казань (12.0 kg) -> 2000 RUB, 7 days
-2026-02-15 00:52:31,797 - __main__ - INFO - Delivery calculated: Москва (3.0 kg) -> 500 RUB, 1 days
