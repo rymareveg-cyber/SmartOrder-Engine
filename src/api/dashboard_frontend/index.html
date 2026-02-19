@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartOrder Engine - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .status-new { background-color: #dbeafe; color: #1e40af; }
+        .status-validated { background-color: #ede9fe; color: #5b21b6; }
+        .status-invoice_created { background-color: #fef9c3; color: #854d0e; }
+        .status-paid { background-color: #dcfce7; color: #166534; }
+        .status-order_created_1c { background-color: #f3e8ff; color: #7c3aed; }
+        .status-tracking_issued { background-color: #ccfbf1; color: #0f766e; }
+        .status-shipped { background-color: #e0e7ff; color: #3730a3; }
+        .status-cancelled { background-color: #fee2e2; color: #991b1b; }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-shopping-cart text-2xl"></i>
+                    <h1 class="text-xl font-bold">SmartOrder Engine</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="refreshBtn" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                        <i class="fas fa-sync-alt"></i> Обновить
+                    </button>
+                    <div id="syncStatus" class="flex items-center space-x-2">
+                        <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                        <span class="text-sm">Синхронизация активна</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Tabs -->
+        <div class="mb-6 border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8">
+                <button onclick="showTab('stats')" id="tab-stats" class="tab-button border-b-2 border-purple-500 text-purple-600 py-4 px-1 text-sm font-medium">
+                    <i class="fas fa-chart-line mr-2"></i>Статистика
+                </button>
+                <button onclick="showTab('analytics')" id="tab-analytics" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-4 px-1 text-sm font-medium">
+                    <i class="fas fa-chart-bar mr-2"></i>Аналитика
+                </button>
+                <button onclick="showTab('orders')" id="tab-orders" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-4 px-1 text-sm font-medium">
+                    <i class="fas fa-list mr-2"></i>Заказы
+                </button>
+                <button onclick="showTab('catalog')" id="tab-catalog" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-4 px-1 text-sm font-medium">
+                    <i class="fas fa-box mr-2"></i>Каталог
+                </button>
+            </nav>
+        </div>
+
+        <!-- Stats Tab -->
+        <div id="content-stats" class="tab-content">
+            <!-- Заголовок и экспорт -->
+            <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900 mb-1">Общая статистика</h2>
+                        <p class="text-gray-500 text-sm">Текущие показатели: сегодня, неделя, месяц</p>
+                    </div>
+                    <button onclick="exportStatsPDF()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center">
+                        <i class="fas fa-file-pdf mr-2"></i>Экспорт PDF
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Выручка сегодня</p>
+                            <p id="revenue-today" class="text-2xl font-bold text-gray-900 mt-2">0 ₽</p>
+                            <p id="revenue-today-change" class="text-xs mt-1"></p>
+                        </div>
+                        <div class="bg-blue-100 p-3 rounded-lg">
+                            <i class="fas fa-ruble-sign text-blue-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Выручка за неделю</p>
+                            <p id="revenue-week" class="text-2xl font-bold text-gray-900 mt-2">0 ₽</p>
+                            <p id="revenue-week-change" class="text-xs mt-1"></p>
+                        </div>
+                        <div class="bg-purple-100 p-3 rounded-lg">
+                            <i class="fas fa-chart-line text-purple-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Конверсия</p>
+                            <p id="conversion-rate" class="text-2xl font-bold text-gray-900 mt-2">0%</p>
+                        </div>
+                        <div class="bg-green-100 p-3 rounded-lg">
+                            <i class="fas fa-percentage text-green-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Средний чек</p>
+                            <p id="average-check" class="text-2xl font-bold text-gray-900 mt-2">0 ₽</p>
+                        </div>
+                        <div class="bg-yellow-100 p-3 rounded-lg">
+                            <i class="fas fa-receipt text-yellow-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Дополнительные метрики -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Новых заказов (сегодня)</p>
+                            <p id="new-orders-today" class="text-2xl font-bold text-gray-900 mt-2">0</p>
+                            <p class="text-xs text-gray-500 mt-1">Неделя: <span id="new-orders-week">0</span> | Месяц: <span id="new-orders-month">0</span></p>
+                        </div>
+                        <div class="bg-blue-100 p-3 rounded-lg">
+                            <i class="fas fa-bell text-blue-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Оплаченных заказов (сегодня)</p>
+                            <p id="paid-orders-today" class="text-2xl font-bold text-gray-900 mt-2">0</p>
+                            <p class="text-xs text-gray-500 mt-1">Неделя: <span id="paid-orders-week">0</span> | Месяц: <span id="paid-orders-month">0</span></p>
+                        </div>
+                        <div class="bg-green-100 p-3 rounded-lg">
+                            <i class="fas fa-check-circle text-green-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Отмененных заказов (сегодня)</p>
+                            <p id="cancelled-orders-today" class="text-2xl font-bold text-gray-900 mt-2">0</p>
+                            <p class="text-xs text-gray-500 mt-1">Неделя: <span id="cancelled-orders-week">0</span> | Месяц: <span id="cancelled-orders-month">0</span></p>
+                        </div>
+                        <div class="bg-red-100 p-3 rounded-lg">
+                            <i class="fas fa-times-circle text-red-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Средний размер корзины</p>
+                            <p id="average-basket-size" class="text-2xl font-bold text-gray-900 mt-2">0</p>
+                            <p class="text-xs text-gray-500 mt-1">товаров в заказе</p>
+                        </div>
+                        <div class="bg-purple-100 p-3 rounded-lg">
+                            <i class="fas fa-shopping-basket text-purple-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Дополнительные метрики: повторные покупки и прогноз -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Повторные покупки</p>
+                            <p id="repeat-customers" class="text-2xl font-bold text-gray-900 mt-2">0</p>
+                            <p class="text-xs text-gray-500 mt-1">клиентов с >1 заказом за месяц</p>
+                        </div>
+                        <div class="bg-indigo-100 p-3 rounded-lg">
+                            <i class="fas fa-redo text-indigo-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Прогноз выручки</p>
+                            <p id="revenue-forecast" class="text-2xl font-bold text-gray-900 mt-2">—</p>
+                            <p class="text-xs text-gray-500 mt-1">на следующие 7 дней</p>
+                        </div>
+                        <div class="bg-teal-100 p-3 rounded-lg">
+                            <i class="fas fa-chart-line text-teal-600 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Топ товаров</h3>
+                    <div id="top-products" class="space-y-3">
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                            <p>Загрузка...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Заказы по периодам</h3>
+                    <canvas id="ordersChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="content-analytics" class="tab-content hidden">
+            <!-- Заголовок и фильтры -->
+            <div class="mb-6 bg-white rounded-xl shadow-md p-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2">Детальная аналитика</h2>
+                        <p class="text-gray-500 text-sm">Глубокий анализ продаж, каналов и эффективности</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <select id="analyticsPeriod" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white" onchange="loadAnalytics()">
+                            <option value="7">Последние 7 дней</option>
+                            <option value="30" selected>Последние 30 дней</option>
+                            <option value="90">Последние 90 дней</option>
+                        </select>
+                        <button onclick="loadAnalytics()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                            <i class="fas fa-sync-alt mr-2"></i>Обновить
+                        </button>
+                        <button onclick="exportAnalyticsPDF()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center">
+                            <i class="fas fa-file-pdf mr-2"></i>Экспорт PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Основные графики -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Динамика выручки</h3>
+                        <i class="fas fa-chart-line text-purple-500"></i>
+                    </div>
+                    <canvas id="revenueChart" style="max-height: 300px;"></canvas>
+                    <p class="text-xs text-gray-500 mt-2">Ежедневная выручка за выбранный период</p>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Анализ по каналам</h3>
+                        <i class="fas fa-funnel-dollar text-blue-500"></i>
+                    </div>
+                    <canvas id="channelChart" style="max-height: 300px;"></canvas>
+                    <p class="text-xs text-gray-500 mt-2">Распределение заказов и выручки по каналам</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Воронка продаж</h3>
+                        <i class="fas fa-filter text-green-500"></i>
+                    </div>
+                    <canvas id="funnelChart" style="max-height: 300px;"></canvas>
+                    <p class="text-xs text-gray-500 mt-2">Конверсия заказов по этапам</p>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Распределение по статусам</h3>
+                        <i class="fas fa-tasks text-orange-500"></i>
+                    </div>
+                    <canvas id="statusChart" style="max-height: 300px;"></canvas>
+                    <p class="text-xs text-gray-500 mt-2">Текущее состояние заказов</p>
+                </div>
+            </div>
+
+            <!-- Дополнительные метрики и топ городов -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <div class="bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Дополнительные метрики</h3>
+                        <i class="fas fa-calculator text-indigo-500"></i>
+                    </div>
+                    <div id="metrics" class="space-y-4">
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                            <p>Загрузка...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="lg:col-span-2 bg-white rounded-xl shadow-md p-6 card-hover">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Топ городов по заказам</h3>
+                        <i class="fas fa-map-marker-alt text-red-500"></i>
+                    </div>
+                    <div id="top-cities" class="space-y-3">
+                        <div class="text-center text-gray-500 py-8">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                            <p>Загрузка...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Orders Tab -->
+        <div id="content-orders" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input type="text" id="searchInput" placeholder="Поиск по номеру, ФИО, телефону..." 
+                           class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        <option value="">Все статусы</option>
+                        <option value="new">🆕 Новый</option>
+                        <option value="validated">✅ Подтверждён</option>
+                        <option value="invoice_created">📄 Счёт создан</option>
+                        <option value="paid">💳 Оплачен</option>
+                        <option value="order_created_1c">📋 Передан в 1С</option>
+                        <option value="tracking_issued">🚚 Трек выдан</option>
+                        <option value="shipped">📦 Отправлен</option>
+                        <option value="cancelled">❌ Отменён</option>
+                    </select>
+                    <select id="channelFilter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        <option value="">Все каналы</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="yandex_mail">Яндекс.Почта</option>
+                        <option value="yandex_forms">Яндекс.Формы</option>
+                    </select>
+                    <button onclick="loadOrders()" class="px-4 py-2 gradient-bg text-white rounded-lg hover:opacity-90 transition">
+                        <i class="fas fa-search mr-2"></i>Поиск
+                    </button>
+                </div>
+                <div class="mt-4 flex items-center space-x-2">
+                    <button onclick="exportOrdersExcel()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center">
+                        <i class="fas fa-file-excel mr-2"></i>Экспорт Excel
+                    </button>
+                    <button onclick="exportOrdersCSV()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                        <i class="fas fa-file-csv mr-2"></i>Экспорт CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Номер</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Клиент</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Канал</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Сумма</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersTableBody" class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="7" class="px-6 py-8 text-center text-gray-500">
+                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p>Загрузка заказов...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="pagination" class="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+                </div>
+            </div>
+        </div>
+
+        <!-- Catalog Tab -->
+        <div id="content-catalog" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                <div class="flex flex-col md:flex-row md:items-center gap-4">
+                    <div class="flex items-center space-x-4 flex-1">
+                        <input type="text" id="catalogSearch" placeholder="Поиск товаров..." 
+                               class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <button onclick="loadCatalog()" class="px-6 py-2 gradient-bg text-white rounded-lg hover:opacity-90 transition">
+                            <i class="fas fa-search mr-2"></i>Поиск
+                        </button>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="exportCatalogExcel()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center">
+                            <i class="fas fa-file-excel mr-2"></i>Экспорт Excel
+                        </button>
+                        <button onclick="exportCatalogCSV()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                            <i class="fas fa-file-csv mr-2"></i>Экспорт CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Артикул</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Цена</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Остаток</th>
+                            </tr>
+                        </thead>
+                        <tbody id="catalogTableBody" class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="4" class="px-6 py-8 text-center text-gray-500">
+                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p>Загрузка каталога...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Details Modal -->
+    <div id="orderModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-xl bg-white">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-900">Детали заказа</h3>
+                <button onclick="closeOrderModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            <div id="orderDetails" class="space-y-4">
+                <!-- Order details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

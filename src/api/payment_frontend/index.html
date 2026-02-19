@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Оплата заказа — SmartOrder</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue:    #2563eb;
+      --blue-d:  #1d4ed8;
+      --green:   #16a34a;
+      --red:     #dc2626;
+      --gray-50: #f8fafc;
+      --gray-100:#f1f5f9;
+      --gray-200:#e2e8f0;
+      --gray-400:#94a3b8;
+      --gray-600:#475569;
+      --gray-800:#1e293b;
+      --shadow:  0 4px 24px rgba(0,0,0,.10);
+      --radius:  14px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #e0e7ff 0%, #f0f9ff 50%, #ecfdf5 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .page-wrap {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .header .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--blue);
+    }
+    .header .logo svg { width: 32px; height: 32px; }
+    .header .sub {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--gray-600);
+    }
+    .ssl-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--green);
+      margin-top: 8px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 20px;
+      padding: 4px 12px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+
+    /* ── Order summary ── */
+    .order-summary {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .order-summary .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--gray-400);
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .order-summary .order-num {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+    .order-summary .order-items {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--gray-600);
+      line-height: 1.6;
+    }
+    .order-summary .divider {
+      border: none;
+      border-top: 1px dashed var(--gray-200);
+      margin: 10px 0;
+    }
+    .order-summary .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--gray-800);
+    }
+    .order-summary .total-row .amount {
+      color: var(--blue);
+      font-size: 20px;
+    }
+
+    /* ── Card visual ── */
+    .card-visual {
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      border-radius: 14px;
+      height: 160px;
+      padding: 22px 24px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+      color: #fff;
+    }
+    .card-visual::before {
+      content: '';
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: rgba(255,255,255,.06);
+      border-radius: 50%;
+    }
+    .card-visual::after {
+      content: '';
+      position: absolute;
+      bottom: -50px; left: 30px;
+      width: 120px; height: 120px;
+      background: rgba(255,255,255,.04);
+      border-radius: 50%;
+    }
+    .card-visual .chip {
+      width: 36px; height: 28px;
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      border-radius: 5px;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 1;
+    }
+    .card-visual .card-number-display {
+      font-size: 19px;
+      letter-spacing: 3px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      position: relative; z-index: 1;
+      font-family: 'Courier New', monospace;
+    }
+    .card-visual .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      position: relative; z-index: 1;
+    }
+    .card-visual .card-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      opacity: .6;
+      margin-bottom: 2px;
+    }
+    .card-visual .card-value {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+    }
+    .card-visual .brand-logo {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+    .brand-visa   { color: #fff; font-style: italic; }
+    .brand-mc     { display: flex; gap: -6px; }
+    .brand-mc .mc-left  { width: 20px; height: 20px; background: #eb0000; border-radius: 50%; }
+    .brand-mc .mc-right { width: 20px; height: 20px; background: #f79e1b; border-radius: 50%; margin-left: -8px; }
+    .brand-mir    { color: #00bfff; font-weight: 900; }
+
+    /* ── Form ── */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gray-600);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+    }
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
+
+    .input-wrap {
+      position: relative;
+    }
+    .input-wrap input {
+      width: 100%;
+      padding: 12px 42px 12px 14px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 10px;
+      font-size: 15px;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      transition: border-color .2s, box-shadow .2s, background .2s;
+      outline: none;
+      font-family: inherit;
+    }
+    .input-wrap input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+      background: #fff;
+    }
+    .input-wrap input.error {
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(220,38,38,.10);
+    }
+    .input-wrap input.ok {
+      border-color: var(--green);
+    }
+    .input-wrap .icon {
+      position: absolute;
+      right: 12px; top: 50%;
+      transform: translateY(-50%);
+      width: 20px; height: 20px;
+      pointer-events: none;
+      color: var(--gray-400);
+    }
+    .input-wrap .toggle-cvv {
+      pointer-events: all;
+      cursor: pointer;
+    }
+
+    .field-error {
+      font-size: 11px;
+      color: var(--red);
+      margin-top: 4px;
+      display: none;
+    }
+    .field-error.show { display: block; }
+
+    /* ── Test cards hint ── */
+    .test-hint {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      font-size: 12px;
+      color: var(--gray-600);
+    }
+    .test-hint strong { color: var(--blue); }
+    .test-hint .cards-list { margin-top: 6px; }
+    .test-hint .cards-list span {
+      display: inline-block;
+      background: #fff;
+      border: 1px solid #bfdbfe;
+      border-radius: 5px;
+      padding: 2px 8px;
+      margin: 2px 4px 2px 0;
+      font-family: monospace;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .test-hint .cards-list span:hover { background: #dbeafe; }
+
+    /* ── Pay button ── */
+    .btn-pay {
+      width: 100%;
+      padding: 15px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .2s, transform .1s, box-shadow .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 14px rgba(37,99,235,.30);
+    }
+    .btn-pay:hover:not(:disabled) {
+      background: var(--blue-d);
+      box-shadow: 0 6px 20px rgba(37,99,235,.35);
+    }
+    .btn-pay:active:not(:disabled) { transform: scale(.98); }
+    .btn-pay:disabled {
+      background: var(--gray-400);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2.5px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Processing overlay ── */
+    .processing-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,.92);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    .processing-overlay.show { display: flex; }
+    .processing-overlay .big-spinner {
+      width: 56px; height: 56px;
+      border: 4px solid #e2e8f0;
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .processing-overlay .msg {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--gray-800);
+    }
+    .processing-overlay .sub {
+      font-size: 13px;
+      color: var(--gray-600);
+    }
+
+    /* ── Success state ── */
+    #state-success { display: none; }
+    #state-form    { display: block; }
+
+    .success-icon {
+      width: 72px; height: 72px;
+      background: #dcfce7;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .success-icon svg { width: 36px; height: 36px; color: var(--green); }
+
+    .success-title {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--gray-800);
+      margin-bottom: 8px;
+    }
+    .success-sub {
+      text-align: center;
+      font-size: 14px;
+      color: var(--gray-600);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .success-details {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .success-details .row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 5px 0;
+    }
+    .success-details .row .key { color: var(--gray-600); }
+    .success-details .row .val { font-weight: 600; color: var(--gray-800); }
+    .success-details .row .val.green { color: var(--green); }
+
+    /* ── Error state ── */
+    #state-error { display: none; }
+    .error-icon {
+      width: 72px; height: 72px;
+      background: #fee2e2;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .error-icon svg { width: 36px; height: 36px; color: var(--red); }
+    .error-title {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--gray-800);
+      margin-bottom: 8px;
+    }
+    .error-sub {
+      text-align: center;
+      font-size: 14px;
+      color: var(--gray-600);
+      margin-bottom: 24px;
+    }
+    .btn-retry {
+      width: 100%;
+      padding: 13px;
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-retry:hover { background: #b91c1c; }
+
+    /* ── Footer ── */
+    .pay-footer {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 11px;
+      color: var(--gray-400);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .pay-footer svg { width: 14px; height: 14px; }
+
+    /* ── Expiry note ── */
+    .token-expiry {
+      font-size: 12px;
+      color: var(--gray-400);
+      text-align: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <svg viewBox="0 0 32 32" fill="none">
+        <rect width="32" height="32" rx="8" fill="#2563eb"/>
+        <path d="M8 10h16M8 16h10M8 22h7" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="24" cy="22" r="5" fill="#10b981"/>
+        <path d="M21.5 22l1.5 1.5 3-3" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      SmartOrder
+    </div>
+    <div class="sub">Безопасная оплата заказа</div>
+    <div>
+      <span class="ssl-badge">
+        <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+          <rect x="2" y="7" width="12" height="8" rx="2" fill="#16a34a"/>
+          <path d="M5 7V5a3 3 0 016 0v2" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Защищённое соединение SSL
+      </span>
+    </div>
+  </div>
+
+  <!-- Main card -->
+  <div class="card">
+
+    <!-- ── SUCCESS STATE ── -->
+    <div id="state-success">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="success-title">Оплата прошла успешно!</div>
+      <div class="success-sub">
+        Ваш заказ оплачен и передан в обработку.<br>
+        Мы уведомим вас о статусе доставки.
+      </div>
+      <div class="success-details">
+        <div class="row"><span class="key">Заказ</span><span class="val" id="suc-order">—</span></div>
+        <div class="row"><span class="key">Транзакция</span><span class="val" id="suc-txn">—</span></div>
+        <div class="row"><span class="key">Сумма</span><span class="val green" id="suc-amount">—</span></div>
+        <div class="row"><span class="key">Дата</span><span class="val" id="suc-date">—</span></div>
+        <div class="row"><span class="key">Карта</span><span class="val" id="suc-card">—</span></div>
+        <div class="row"><span class="key">Статус</span><span class="val green">✓ Оплачено</span></div>
+      </div>
+    </div>
+
+    <!-- ── ERROR STATE ── -->
+    <div id="state-error">
+      <div class="error-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div class="error-title">Ошибка оплаты</div>
+      <div class="error-sub" id="error-msg">Платёж не прошёл. Проверьте данные карты и попробуйте снова.</div>
+      <button class="btn-retry" onclick="showForm()">Попробовать снова</button>
+    </div>
+
+    <!-- ── FORM STATE ── -->
+    <div id="state-form">
+
+      <!-- Order summary -->
+      <div class="order-summary" id="order-summary">
+        <div class="label">Детали заказа</div>
+        <div class="order-num" id="ord-number">Загрузка...</div>
+        <div class="order-items" id="ord-items"></div>
+        <hr class="divider">
+        <div class="total-row">
+          <span>Итого к оплате</span>
+          <span class="amount" id="ord-total">—</span>
+        </div>
+      </div>
+
+      <!-- Virtual card -->
+      <div class="card-visual">
+        <div class="chip"></div>
+        <div class="card-number-display" id="cv-number">•••• •••• •••• ••••</div>
+        <div class="card-footer">
+          <div>
+            <div class="card-label">Держатель</div>
+            <div class="card-value" id="cv-name">ИМЯ ФАМИЛИЯ</div>
+          </div>
+          <div>
+            <div class="card-label">Действует до</div>
+            <div class="card-value" id="cv-expiry">ММ/ГГ</div>
+          </div>
+          <div class="brand-logo" id="cv-brand"></div>
+        </div>
+      </div>
+
+      <!-- Test cards hint -->
+      <div class="test-hint">
+        <strong>🧪 Тестовые карты</strong> — используйте для проверки:
+        <div class="cards-list">
+          <span onclick="fillCard('4111111111111111','Visa',true)"  title="Visa — успешная оплата">4111 1111 1111 1111</span>
+          <span onclick="fillCard('5500005555555559','MasterCard',true)" title="MasterCard — успешная">5500 0055 5555 5559</span>
+          <span onclick="fillCard('2201382000000013','МИР',true)"   title="МИР — успешная">2201 3820 0000 0013</span>
+          <span onclick="fillCard('4000000000000002','Visa',false)" title="Visa — отклонена" style="border-color:#fca5a5;color:#dc2626">4000 0000 0000 0002 ✗</span>
+        </div>
+        <div style="margin-top:6px;color:var(--gray-400)">Любой CVV из 3 цифр · Срок: любой будущий (например, 12/27)</div>
+      </div>
+
+      <!-- Card number -->
+      <div class="form-group">
+        <label>Номер карты</label>
+        <div class="input-wrap">
+          <input type="text" id="card-number" placeholder="0000 0000 0000 0000"
+                 maxlength="19" inputmode="numeric" autocomplete="cc-number" />
+          <svg class="icon" id="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="2" y="5" width="20" height="14" rx="2"/>
+            <line x1="2" y1="10" x2="22" y2="10"/>
+          </svg>
+        </div>
+        <div class="field-error" id="err-number">Введите корректный 16-значный номер карты</div>
+      </div>
+
+      <!-- Holder name -->
+      <div class="form-group">
+        <label>Имя держателя (латиницей)</label>
+        <div class="input-wrap">
+          <input type="text" id="card-name" placeholder="IVAN IVANOV"
+                 maxlength="26" autocomplete="cc-name" />
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="7" r="4"/>
+            <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+        </div>
+        <div class="field-error" id="err-name">Введите имя держателя карты</div>
+      </div>
+
+      <!-- Expiry + CVV -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Срок действия</label>
+          <div class="input-wrap">
+            <input type="text" id="card-expiry" placeholder="ММ/ГГ"
+                   maxlength="5" inputmode="numeric" autocomplete="cc-exp" />
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </div>
+          <div class="field-error" id="err-expiry">Введите корректный срок действия</div>
+        </div>
+        <div class="form-group">
+          <label>CVV / CVC</label>
+          <div class="input-wrap">
+            <input type="password" id="card-cvv" placeholder="•••"
+                   maxlength="3" inputmode="numeric" autocomplete="cc-csc" />
+            <svg class="icon toggle-cvv" id="cvv-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 onclick="toggleCvv()">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </div>
+          <div class="field-error" id="err-cvv">Введите 3-значный CVV</div>
+        </div>
+      </div>
+
+      <!-- Pay button -->
+      <button class="btn-pay" id="btn-pay" onclick="submitPayment()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2"/>
+          <line x1="2" y1="10" x2="22" y2="10"/>
+        </svg>
+        <span id="btn-text">Оплатить</span>
+      </button>
+
+      <div class="token-expiry" id="token-expiry-msg"></div>
+
+    </div><!-- /state-form -->
+  </div><!-- /card -->
+
+  <!-- Footer -->
+  <div class="pay-footer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0110 0v4"/>
+    </svg>
+    Данные защищены шифрованием TLS 1.3 · SmartOrder Engine
+  </div>
+</div>
+
+<!-- Processing overlay -->
+<div class="processing-overlay" id="processing-overlay">
+  <div class="big-spinner"></div>
+  <div class="msg">Обработка платежа...</div>
+  <div class="sub">Пожалуйста, не закрывайте страницу</div>
+</div>
+
+<script>
+/* ─────────── State ─────────── */
+const TOKEN  = location.pathname.split('/pay/')[1] || '';
+const PAY_API = `${location.origin}/api/payments/pay/${TOKEN}`;
+let   orderData = null;
+let   cvvVisible = false;
+let   declinedCards = ['4000000000000002']; // тестовые карты, которые "отклоняются"
+
+/* ─────────── Init ─────────── */
+document.addEventListener('DOMContentLoaded', loadOrder);
+
+async function loadOrder() {
+  try {
+    const res = await fetch(`${location.origin}/api/payments/order/${TOKEN}`);
+    if (!res.ok) throw new Error(await res.text());
+    orderData = await res.json();
+
+    document.getElementById('ord-number').textContent = orderData.order_number;
+    document.getElementById('ord-total').textContent  = formatMoney(orderData.total_amount);
+    document.getElementById('btn-text').textContent   = `Оплатить ${formatMoney(orderData.total_amount)}`;
+
+    // Список товаров
+    const itemsEl = document.getElementById('ord-items');
+    if (orderData.items && orderData.items.length) {
+      itemsEl.innerHTML = orderData.items.map(it =>
+        `<div style="display:flex;justify-content:space-between">
+           <span>${it.name} × ${it.quantity}</span>
+           <span style="font-weight:600">${formatMoney(it.price_at_order * it.quantity)}</span>
+         </div>`
+      ).join('');
+      if (orderData.delivery_cost > 0) {
+        itemsEl.innerHTML += `<div style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="color:var(--gray-400)">Доставка</span>
+          <span>${formatMoney(orderData.delivery_cost)}</span>
+        </div>`;
+      }
+    } else {
+      itemsEl.textContent = 'Товары из заказа ' + orderData.order_number;
+    }
+
+    // Срок действия ссылки
+    if (orderData.expires_at) {
+      const exp = new Date(orderData.expires_at);
+      document.getElementById('token-expiry-msg').textContent =
+        `Ссылка действительна до ${exp.toLocaleString('ru-RU')}`;
+    }
+  } catch(e) {
+    document.getElementById('ord-number').textContent = 'Не удалось загрузить заказ';
+    document.getElementById('btn-pay').disabled = true;
+    console.error('loadOrder:', e);
+  }
+}
+
+/* ─────────── Card input formatting ─────────── */
+const numInput    = document.getElementById('card-number');
+const nameInput   = document.getElementById('card-name');
+const expInput    = document.getElementById('card-expiry');
+const cvvInput    = document.getElementById('card-cvv');
+
+numInput.addEventListener('input', () => {
+  let v = numInput.value.replace(/\D/g,'').slice(0,16);
+  numInput.value = v.match(/.{1,4}/g)?.join(' ') || v;
+  updateCardVisual();
+  detectBrand(v);
+  clearErr('number');
+});
+
+nameInput.addEventListener('input', () => {
+  nameInput.value = nameInput.value.toUpperCase().replace(/[^A-Z\s]/g,'');
+  document.getElementById('cv-name').textContent = nameInput.value || 'ИМЯ ФАМИЛИЯ';
+  clearErr('name');
+});
+
+expInput.addEventListener('input', () => {
+  let v = expInput.value.replace(/\D/g,'').slice(0,4);
+  if (v.length >= 2) v = v.slice(0,2) + '/' + v.slice(2);
+  expInput.value = v;
+  document.getElementById('cv-expiry').textContent = v || 'ММ/ГГ';
+  clearErr('expiry');
+});
+
+cvvInput.addEventListener('input', () => {
+  cvvInput.value = cvvInput.value.replace(/\D/g,'').slice(0,3);
+  clearErr('cvv');
+});
+
+function updateCardVisual() {
+  const raw = numInput.value.replace(/\s/g,'').padEnd(16,'•');
+  const parts = raw.match(/.{1,4}/g) || [];
+  document.getElementById('cv-number').textContent = parts.join(' ');
+}
+
+function detectBrand(num) {
+  const brandEl = document.getElementById('cv-brand');
+  if (/^4/.test(num)) {
+    brandEl.innerHTML = '<span class="brand-visa">VISA</span>';
+  } else if (/^5[1-5]/.test(num) || /^2[2-7]/.test(num)) {
+    brandEl.innerHTML = '<span class="brand-mc"><span class="mc-left"></span><span class="mc-right"></span></span>';
+  } else if (/^220/.test(num)) {
+    brandEl.innerHTML = '<span class="brand-mir">МИР</span>';
+  } else {
+    brandEl.innerHTML = '';
+  }
+}
+
+function toggleCvv() {
+  cvvVisible = !cvvVisible;
+  cvvInput.type = cvvVisible ? 'text' : 'password';
+}
+
+/* ─────────── Fill test card ─────────── */
+function fillCard(num, brand, willSucceed) {
+  numInput.value  = num.match(/.{1,4}/g).join(' ');
+  nameInput.value = 'TEST USER';
+  expInput.value  = '12/27';
+  cvvInput.value  = '123';
+  document.getElementById('cv-name').textContent   = 'TEST USER';
+  document.getElementById('cv-expiry').textContent = '12/27';
+  updateCardVisual();
+  detectBrand(num.replace(/\s/g,''));
+  ['number','name','expiry','cvv'].forEach(clearErr);
+}
+
+/* ─────────── Validation ─────────── */
+function luhn(num) {
+  let sum = 0, odd = false;
+  for (let i = num.length - 1; i >= 0; i--) {
+    let d = parseInt(num[i]);
+    if (odd) { d *= 2; if (d > 9) d -= 9; }
+    sum += d;
+    odd = !odd;
+  }
+  return sum % 10 === 0;
+}
+
+function validateForm() {
+  let ok = true;
+  const num     = numInput.value.replace(/\s/g,'');
+  const expiry  = expInput.value;
+  const cvv     = cvvInput.value;
+  const holder  = nameInput.value.trim();
+
+  if (num.length !== 16 || !luhn(num)) {
+    showErr('number'); ok = false;
+  }
+  if (holder.length < 2) {
+    showErr('name'); ok = false;
+  }
+  if (!/^\d{2}\/\d{2}$/.test(expiry)) {
+    showErr('expiry'); ok = false;
+  } else {
+    const [mm, yy] = expiry.split('/').map(Number);
+    const nowYY = new Date().getFullYear() % 100;
+    const nowMM = new Date().getMonth() + 1;
+    if (mm < 1 || mm > 12 || yy < nowYY || (yy === nowYY && mm < nowMM)) {
+      showErr('expiry'); ok = false;
+    }
+  }
+  if (!/^\d{3}$/.test(cvv)) {
+    showErr('cvv'); ok = false;
+  }
+  return ok;
+}
+
+function showErr(f) { document.getElementById('err-' + f)?.classList.add('show'); document.getElementById('card-' + f)?.classList.add('error'); }
+function clearErr(f) { document.getElementById('err-' + f)?.classList.remove('show'); document.getElementById('card-' + f)?.classList.remove('error'); }
+
+/* ─────────── Payment submit ─────────── */
+async function submitPayment() {
+  if (!validateForm()) return;
+  const num = numInput.value.replace(/\s/g,'');
+
+  setProcessing(true);
+
+  // Небольшая задержка для реалистичности
+  await delay(1200 + Math.random() * 800);
+
+  // Симуляция отклонения для тестовой карты
+  if (declinedCards.includes(num)) {
+    setProcessing(false);
+    showError('Платёж отклонён банком. Попробуйте другую карту.');
+    return;
+  }
+
+  try {
+    const res = await fetch(PAY_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        card: {
+          number:      num,
+          cvv:         cvvInput.value,
+          expiry:      expInput.value,
+          holder_name: nameInput.value.trim()
+        }
+      })
+    });
+
+    const data = await res.json();
+    setProcessing(false);
+
+    if (!res.ok) {
+      const msg = data?.error?.message || data?.detail || 'Ошибка оплаты';
+      showError(msg);
+      return;
+    }
+
+    showSuccess(data);
+
+  } catch(e) {
+    setProcessing(false);
+    showError('Ошибка соединения. Проверьте подключение и попробуйте снова.');
+  }
+}
+
+function setProcessing(on) {
+  document.getElementById('processing-overlay').classList.toggle('show', on);
+  document.getElementById('btn-pay').disabled = on;
+}
+
+function showSuccess(data) {
+  document.getElementById('state-form').style.display   = 'none';
+  document.getElementById('state-error').style.display  = 'none';
+  document.getElementById('state-success').style.display = 'block';
+
+  document.getElementById('suc-order').textContent  = data.order_number  || '—';
+  document.getElementById('suc-txn').textContent    = data.transaction_id || '—';
+  document.getElementById('suc-amount').textContent = formatMoney(data.amount);
+  document.getElementById('suc-date').textContent   = formatDate(data.paid_at);
+  document.getElementById('suc-card').textContent   = '•••• •••• •••• ' + (data.card_last4 || '****');
+}
+
+function showError(msg) {
+  document.getElementById('state-form').style.display   = 'none';
+  document.getElementById('state-success').style.display = 'none';
+  document.getElementById('state-error').style.display  = 'block';
+  document.getElementById('error-msg').textContent = msg;
+}
+
+function showForm() {
+  document.getElementById('state-error').style.display  = 'none';
+  document.getElementById('state-success').style.display = 'none';
+  document.getElementById('state-form').style.display   = 'block';
+  document.getElementById('btn-pay').disabled = false;
+}
+
+/* ─────────── Utils ─────────── */
+function formatMoney(v) {
+  if (v == null) return '—';
+  return new Intl.NumberFormat('ru-RU', { style:'currency', currency:'RUB', maximumFractionDigits: 0 }).format(v);
+}
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('ru-RU');
+}
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

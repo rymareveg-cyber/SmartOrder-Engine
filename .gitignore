@@ -80,10 +80,14 @@ temp/
 *.sqlite
 *.sqlite3
 
-# Documentation (опционально, если не нужно коммитить)
-docs/
+# Documentation archive (не нужно в репозитории)
+docs/archive/
 AGENTS.md
 project.md
+MIGRATION_PLAN.md
+
+# Homework (учебные материалы — приватно)
+Homework/
 
 # Database migrations (удалённые миграции)
 database/migrations/008_add_transaction_id.sql
