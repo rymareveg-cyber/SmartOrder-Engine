@@ -91,6 +91,7 @@ Homework/
 
 # Сервисные скрипты — не для репозитория
 reset.py
+seed_orders.py
 
 # Database migrations (удалённые миграции)
 database/migrations/008_add_transaction_id.sql
