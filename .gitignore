@@ -89,6 +89,9 @@ MIGRATION_PLAN.md
 # Homework (учебные материалы — приватно)
 Homework/
 
+# Сервисные скрипты — не для репозитория
+reset.py
+
 # Database migrations (удалённые миграции)
 database/migrations/008_add_transaction_id.sql
 database/migrations/009_add_telegram_user_id_and_phone_normalization.sql
