@@ -1016,24 +1016,122 @@ async def update_order_status(
 
                 background_tasks.add_task(generate_tracking_for_1c)
         
-        # 3. Отправка уведомления в Telegram (только для заказов из Telegram, если есть telegram_user_id и статус изменился) - в фоне
-        # Проверяем канал заказа, чтобы не отправлять Telegram уведомления для заказов из почты
-        if (updated_order.channel == "telegram" and 
-            updated_order.telegram_user_id and 
-            old_status != status_update.status):
-            async def send_telegram_notification_background():
-                try:
-                    from src.services.telegram_bot import send_status_change_notification
-                    await send_status_change_notification(
-                        telegram_user_id=updated_order.telegram_user_id,
-                        order_number=updated_order.order_number,
-                        old_status=old_status,
-                        new_status=status_update.status
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to send status change notification: {e}")
-            
-            background_tasks.add_task(send_telegram_notification_background)
+        # 3. Уведомления при смене статуса (Telegram и Email)
+        if old_status != status_update.status:
+            _upd_order_id     = str(updated_order.id)
+            _upd_order_number = updated_order.order_number
+            _upd_channel      = updated_order.channel
+            _upd_tg_user_id   = updated_order.telegram_user_id
+            _upd_email        = updated_order.customer_email
+            _upd_tracking     = updated_order.tracking_number
+            _upd_name         = updated_order.customer_name
+            _new_status       = status_update.status
+            _old_status       = old_status
+
+            # ── Telegram (для заказов из Telegram) ─────────────────────────
+            if _upd_channel == "telegram" and _upd_tg_user_id:
+                async def send_telegram_notification_background():
+                    try:
+                        # Всегда получаем актуальный трек-номер из БД
+                        tracking = _upd_tracking
+                        if not tracking:
+                            try:
+                                fresh = await asyncio.to_thread(OrderService.get_order, _upd_order_id)
+                                tracking = fresh.tracking_number if fresh else None
+                            except Exception:
+                                pass
+
+                        if _new_status == "shipped":
+                            # Посылка передана курьеру — специальное уведомление
+                            from src.services.telegram_bot import send_shipped_notification
+                            await send_shipped_notification(
+                                telegram_user_id=_upd_tg_user_id,
+                                order_number=_upd_order_number,
+                                tracking_number=tracking,
+                                order_id=_upd_order_id,
+                            )
+                        else:
+                            from src.services.telegram_bot import send_status_change_notification
+                            await send_status_change_notification(
+                                telegram_user_id=_upd_tg_user_id,
+                                order_number=_upd_order_number,
+                                old_status=_old_status,
+                                new_status=_new_status,
+                                tracking_number=tracking,
+                                order_id=_upd_order_id,
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to send Telegram status change notification: {e}")
+
+                background_tasks.add_task(send_telegram_notification_background)
+
+            # ── Email (для заказов из почты) ────────────────────────────────
+            if _upd_channel == "yandex_mail" and _upd_email:
+                async def send_email_status_notification_background():
+                    try:
+                        # Всегда получаем актуальный трек-номер
+                        tracking = _upd_tracking
+                        if not tracking:
+                            try:
+                                fresh = await asyncio.to_thread(OrderService.get_order, _upd_order_id)
+                                tracking = fresh.tracking_number if fresh else None
+                            except Exception:
+                                pass
+
+                        if _new_status == "tracking_issued":
+                            # Трек присвоен автоматически — уведомление с треком
+                            if tracking:
+                                from src.services.email_notifier import send_tracking_email
+                                await asyncio.to_thread(
+                                    send_tracking_email,
+                                    _upd_email,
+                                    _upd_order_number,
+                                    tracking,
+                                    _upd_name,
+                                    False,  # is_shipped=False: посылка ещё не в пути
+                                )
+                                logger.info(
+                                    f"Sent tracking_issued email to {_upd_email} for order {_upd_order_number}"
+                                )
+                        elif _new_status == "shipped":
+                            # Посылка передана курьеру — уведомление «в пути»
+                            from src.services.email_notifier import send_tracking_email
+                            await asyncio.to_thread(
+                                send_tracking_email,
+                                _upd_email,
+                                _upd_order_number,
+                                tracking,
+                                _upd_name,
+                                True,  # is_shipped=True
+                            )
+                            logger.info(
+                                f"Sent shipped email to {_upd_email} for order {_upd_order_number}"
+                            )
+                        elif _new_status == "paid":
+                            # Уведомление об успешной оплате
+                            from src.services.email_notifier import _send_email
+                            from email.mime.multipart import MIMEMultipart
+                            from email.mime.text import MIMEText
+                            from src.config import SMTPConfig
+                            if SMTPConfig.USER and SMTPConfig.PASSWORD:
+                                name = _upd_name or "Уважаемый клиент"
+                                body = (
+                                    f"Здравствуйте, {name}!\n\n"
+                                    f"✅ Оплата по заказу #{_upd_order_number} подтверждена.\n\n"
+                                    f"Мы готовим ваш заказ к отправке — вы получите трек-номер "
+                                    f"как только посылка будет передана в доставку.\n\n"
+                                    f"С уважением,\nSmartOrder Engine"
+                                )
+                                msg = MIMEMultipart("alternative")
+                                msg["From"] = f"{SMTPConfig.FROM_NAME} <{SMTPConfig.FROM_EMAIL or SMTPConfig.USER}>"
+                                msg["To"] = _upd_email
+                                msg["Subject"] = f"✅ Оплата заказа #{_upd_order_number} подтверждена"
+                                msg.attach(MIMEText(body, "plain", "utf-8"))
+                                await asyncio.to_thread(_send_email, msg, _upd_email)
+                    except Exception as e:
+                        logger.warning(f"Failed to send email status notification: {e}")
+
+                background_tasks.add_task(send_email_status_notification_background)
         
         # Возвращаем ответ сразу, фоновые задачи выполнятся после ответа
         return updated_order

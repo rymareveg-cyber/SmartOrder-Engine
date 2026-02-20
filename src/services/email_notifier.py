@@ -436,20 +436,26 @@ def send_clarification_email(
 def send_tracking_email(
     to_email: str,
     order_number: str,
-    tracking_number: str,
-    customer_name: Optional[str] = None
+    tracking_number: Optional[str],
+    customer_name: Optional[str] = None,
+    is_shipped: bool = False,
 ) -> bool:
     """
-    Отправка email с трек-номером отправления.
+    Отправка email с трек-номером.
+
+    Используется в двух сценариях:
+    - is_shipped=False (tracking_issued): трек присвоен, посылка формируется на складе.
+    - is_shipped=True  (shipped):         посылка передана курьеру и уже в пути.
 
     Args:
         to_email: Email получателя
         order_number: Номер заказа
-        tracking_number: Трек-номер
+        tracking_number: Трек-номер (может отсутствовать при shipped без предыдущего трека)
         customer_name: Имя клиента
+        is_shipped: True — посылка в пути, False — трек только присвоен
 
     Returns:
-        True если успешно отправлено, False в противном случае
+        True если успешно отправлено, False иначе
     """
     if not SMTPConfig.USER or not SMTPConfig.PASSWORD:
         logger.warning("SMTP credentials not configured, skipping tracking email")
@@ -457,28 +463,111 @@ def send_tracking_email(
 
     try:
         name = customer_name or "уважаемый клиент"
-        message_parts = [
+        track = tracking_number or "—"
+
+        if is_shipped:
+            subject    = f"🚚 Заказ #{order_number} в пути!"
+            header_txt = "🚚 Ваш заказ в пути!"
+            header_bg  = "linear-gradient(135deg,#1a73e8,#0d47a1)"
+            intro_line = (
+                f"Ваш заказ <strong>#{order_number}</strong> передан курьеру "
+                f"и уже в пути к вам. Ожидайте доставку в ближайшие дни."
+            )
+            track_label_html = "Трек-номер для отслеживания"
+            footer_note = "Ожидайте доставку — обычно это 1–5 рабочих дней."
+        else:
+            subject    = f"📦 Заказ #{order_number} — трек-номер присвоен"
+            header_txt = "📦 Трек-номер присвоен!"
+            header_bg  = "linear-gradient(135deg,#388e3c,#1b5e20)"
+            intro_line = (
+                f"Вашему заказу <strong>#{order_number}</strong> присвоен трек-номер. "
+                f"Посылка формируется на складе — как только её передадут курьеру, "
+                f"вы получите ещё одно письмо."
+            )
+            track_label_html = "Ваш трек-номер"
+            footer_note = "Трек уже активен — вводите на сайте транспортной компании."
+
+        # ── Plain text ──────────────────────────────────────────────────────
+        if is_shipped:
+            plain_intro = f"Ваш заказ #{order_number} передан курьеру и уже в пути!"
+        else:
+            plain_intro = (
+                f"Вашему заказу #{order_number} присвоен трек-номер.\n"
+                f"Посылка формируется на складе."
+            )
+
+        plain_text = "\n".join([
             f"Здравствуйте, {name}!",
             "",
-            f"🚚 Ваш заказ #{order_number} оплачен и передан в доставку!",
+            plain_intro,
             "",
-            f"Трек-номер для отслеживания: {tracking_number}",
+            f"Трек-номер: {track}",
             "",
-            "Используйте трек-номер для отслеживания посылки на сайте транспортной компании.",
+            footer_note,
             "",
             "С уважением,",
-            SMTPConfig.FROM_NAME
-        ]
+            SMTPConfig.FROM_NAME,
+        ])
 
-        message_text = "\n".join(message_parts)
+        # ── HTML ────────────────────────────────────────────────────────────
+        html_body = f"""
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:30px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+        <tr>
+          <td style="background:{header_bg};padding:32px 40px;text-align:center;">
+            <h1 style="margin:0;color:#ffffff;font-size:26px;">{header_txt}</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,.75);font-size:15px;">Заказ #{order_number}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="font-size:16px;color:#333;margin:0 0 20px;">
+              Здравствуйте, <strong>{name}</strong>!
+            </p>
+            <p style="font-size:15px;color:#555;margin:0 0 28px;">
+              {intro_line}
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr>
+                <td style="background:#e8f5e9;border:2px solid #4caf50;border-radius:10px;
+                            padding:20px;text-align:center;">
+                  <p style="margin:0 0 6px;font-size:13px;color:#388e3c;text-transform:uppercase;
+                             letter-spacing:1px;font-weight:600;">{track_label_html}</p>
+                  <p style="margin:0;font-size:22px;font-weight:700;color:#1b5e20;
+                             letter-spacing:2px;">{track}</p>
+                </td>
+              </tr>
+            </table>
+            <p style="font-size:14px;color:#777;margin:0;">{footer_note}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #eee;text-align:center;">
+            <p style="margin:0;font-size:13px;color:#999;">
+              Спасибо, что выбрали нас! &nbsp;·&nbsp; {SMTPConfig.FROM_NAME}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+"""
 
         msg = MIMEMultipart('alternative')
         msg['From'] = f"{SMTPConfig.FROM_NAME} <{SMTPConfig.FROM_EMAIL or SMTPConfig.USER}>"
         msg['To'] = to_email
-        msg['Subject'] = f"🚚 Ваш заказ #{order_number} отправлен — трек-номер"
+        msg['Subject'] = subject
 
-        text_part = MIMEText(message_text, 'plain', 'utf-8')
-        msg.attach(text_part)
+        msg.attach(MIMEText(plain_text, 'plain', 'utf-8'))
+        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
         return _send_email(msg, to_email)
 

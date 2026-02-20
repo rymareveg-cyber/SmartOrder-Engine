@@ -343,6 +343,19 @@ async def pay_by_token(
             f"Payment via token successful: order={result['order_number']}, "
             f"txn={result['transaction_id']}, amount={result['amount']}"
         )
+
+        # Убираем кнопки оплаты из Telegram-сообщения со счётом (в фоне)
+        try:
+            import asyncio as _aio
+            order_obj = OrderService.get_order(order_id)
+            if order_obj and order_obj.telegram_user_id:
+                from src.services.telegram_bot import remove_payment_buttons
+                _aio.create_task(
+                    remove_payment_buttons(order_id, result["order_number"])
+                )
+        except Exception as _e:
+            logger.debug(f"Could not schedule remove_payment_buttons: {_e}")
+
         return PaymentResponse(**result)
 
     except (PaymentValidationError, PaymentProcessingError):

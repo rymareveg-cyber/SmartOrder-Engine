@@ -457,9 +457,9 @@ async function showOrderDetails(orderId) {
             'validated':        '✅ Подтверждён',
             'invoice_created':  '📄 Счёт создан',
             'paid':             '💳 Оплачен',
-            'order_created_1c': '📋 Передан в 1С',
-            'tracking_issued':  '🚚 Трек выдан',
-            'shipped':          '📦 Отправлен',
+            'order_created_1c': '📋 Передан на склад',
+            'tracking_issued':  '📦 Трек присвоен',
+            'shipped':          '🚚 В пути',
             'cancelled':        '❌ Отменён'
         };
         
@@ -821,9 +821,9 @@ function updateFunnelChart(funnelData) {
         'validated':        '✅ Подтверждён',
         'invoice_created':  '📄 Счёт создан',
         'paid':             '💳 Оплачен',
-        'order_created_1c': '📋 Передан в 1С',
-        'tracking_issued':  '🚚 Трек выдан',
-        'shipped':          '📦 Отправлен',
+        'order_created_1c': '📋 Передан на склад',
+        'tracking_issued':  '📦 Трек присвоен',
+        'shipped':          '🚚 В пути',
         'cancelled':        '❌ Отменён'
     };
     
@@ -893,9 +893,9 @@ function updateStatusChart(statusData) {
         'validated':        '✅ Подтверждён',
         'invoice_created':  '📄 Счёт создан',
         'paid':             '💳 Оплачен',
-        'order_created_1c': '📋 Передан в 1С',
-        'tracking_issued':  '🚚 Трек выдан',
-        'shipped':          '📦 Отправлен',
+        'order_created_1c': '📋 Передан на склад',
+        'tracking_issued':  '📦 Трек присвоен',
+        'shipped':          '🚚 В пути',
         'cancelled':        '❌ Отменён'
     };
     
@@ -1060,9 +1060,9 @@ function getStatusName(status) {
         'validated':        '✅ Подтверждён',
         'invoice_created':  '📄 Счёт создан',
         'paid':             '💳 Оплачен',
-        'order_created_1c': '📋 Передан в 1С',
-        'tracking_issued':  '🚚 Трек выдан',
-        'shipped':          '📦 Отправлен',
+        'order_created_1c': '📋 Передан на склад',
+        'tracking_issued':  '📦 Трек присвоен',
+        'shipped':          '🚚 В пути',
         'cancelled':        '❌ Отменён'
     };
     return names[status] || status;

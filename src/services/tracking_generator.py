@@ -130,7 +130,8 @@ class TrackingGenerator:
                         asyncio.run(send_tracking_notification(
                             telegram_user_id=order.telegram_user_id,
                             order_number=order.order_number,
-                            tracking_number=tracking_number
+                            tracking_number=tracking_number,
+                            order_id=str(order_id),
                         ))
                     except Exception as e:
                         logger.warning(f"Failed to send Telegram tracking notification: {e}")

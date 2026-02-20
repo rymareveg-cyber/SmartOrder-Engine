@@ -852,10 +852,101 @@ async def cancel_payment_command(update: Update, context: ContextTypes.DEFAULT_T
         )
 
 
+def _format_orders_list(orders: list, title: str = "📋 Ваши заказы") -> tuple[str, list]:
+    """
+    Формирует текст и inline-кнопки для списка заказов.
+    Returns: (message_text, keyboard_buttons)
+    """
+    STATUS_LABELS = {
+        "new":             ("🆕", "Новый — ждём обработки"),
+        "validated":       ("✅", "Подтверждён — формируем счёт"),
+        "invoice_created": ("📄", "Ожидает оплаты"),
+        "paid":            ("💳", "Оплачен — готовим к отправке"),
+        "order_created_1c":("📋", "Передан на склад"),
+        "tracking_issued": ("📦", "Трек присвоен — посылка формируется"),
+        "shipped":         ("🚚", "В пути — передан курьеру"),
+        "cancelled":       ("❌", "Отменён"),
+    }
+
+    shown = orders[:10]
+    header = f"{title} ({len(orders)}):\n"
+    lines = [header]
+
+    keyboard_buttons = []
+    for order in shown:
+        emoji, label = STATUS_LABELS.get(order.status, ("❓", order.status))
+
+        # Дата в человекочитаемом формате
+        created = "—"
+        if order.created_at:
+            try:
+                from datetime import datetime as dt
+                d = dt.fromisoformat(str(order.created_at).replace("Z", "+00:00"))
+                created = d.strftime("%d.%m.%Y %H:%M")
+            except Exception:
+                created = str(order.created_at)[:16]
+
+        # Строка заказа
+        lines.append(f"{'─' * 28}")
+        lines.append(f"{emoji} {order.order_number}")
+        lines.append(f"   Статус:  {label}")
+        lines.append(f"   Сумма:   {order.total_amount:,.0f} ₽")
+        lines.append(f"   Дата:    {created}")
+
+        if order.tracking_number:
+            lines.append(f"   Трек:    {order.tracking_number}")
+        if order.customer_address:
+            addr = order.customer_address
+            if len(addr) > 50:
+                addr = addr[:47] + "…"
+            lines.append(f"   Адрес:   {addr}")
+
+        lines.append("")
+
+        # Кнопка оплаты для заказов, ожидающих оплаты
+        if order.status == "invoice_created":
+            try:
+                from src.api.payments import create_payment_token, _get_base_url
+                _tok = create_payment_token(str(order.id))
+                _pay_url = f"{_get_base_url()}/pay/{_tok}"
+                is_local = any(x in _pay_url for x in ("localhost", "127.0.0.1", "0.0.0.0"))
+                if is_local:
+                    keyboard_buttons.append([
+                        InlineKeyboardButton(
+                            f"💳 Оплатить {order.order_number}",
+                            callback_data=f"pay_order_{order.id}"
+                        )
+                    ])
+                else:
+                    keyboard_buttons.append([
+                        InlineKeyboardButton(
+                            f"💳 Оплатить {order.order_number}",
+                            url=_pay_url
+                        )
+                    ])
+            except Exception:
+                keyboard_buttons.append([
+                    InlineKeyboardButton(
+                        f"💳 Оплатить {order.order_number}",
+                        callback_data=f"pay_order_{order.id}"
+                    )
+                ])
+
+    if len(orders) > 10:
+        lines.append(f"… и ещё {len(orders) - 10} заказов\n")
+
+    if not keyboard_buttons:
+        lines.append("💡 Чтобы оформить новый заказ — просто напишите сообщение.")
+    else:
+        lines.append("💡 Нажмите кнопку оплаты рядом с нужным заказом.")
+
+    return "\n".join(lines), keyboard_buttons
+
+
 async def my_orders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /my_orders - показать заказы пользователя."""
+    """Обработчик команды /my_orders — показать заказы пользователя."""
     user = update.effective_user
-    
+
     # Проверка авторизации (в отдельном потоке)
     is_authorized = await asyncio.to_thread(TelegramUserService.is_authorized, user.id) if user else False
     if not user or not is_authorized:
@@ -863,99 +954,41 @@ async def my_orders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [KeyboardButton("📱 Авторизоваться по номеру телефона", request_contact=True)]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
-        
         await update.message.reply_text(
             "⚠️ Для просмотра заказов необходима авторизация.\n\n"
             "Нажмите кнопку ниже для авторизации.",
             reply_markup=reply_markup
         )
         return
-    
-    # Получаем информацию о пользователе из БД (в отдельном потоке)
+
+    # Получаем телефон пользователя из БД
     user_info = await asyncio.to_thread(TelegramUserService.get_user_info, user.id)
     phone = user_info.get('phone') if user_info else None
-    
+
     if not phone:
         await update.message.reply_text(
             "❌ Ошибка: не найден номер телефона. Пожалуйста, авторизуйтесь снова.\n\n"
             "Используйте кнопку \"📱 Поделиться телефоном\" в меню."
         )
         return
-    
+
     try:
         from src.services.order_service import OrderService
-        
-        # Получаем заказы по телефону (в отдельном потоке)
+
         orders = await asyncio.to_thread(OrderService.get_orders_by_phone, phone, user.id if user else None)
-        
+
         if not orders:
-            authorized_keyboard = get_authorized_keyboard()
             await update.message.reply_text(
                 "📭 У вас пока нет заказов.\n\n"
-                "Оформите заказ, написав сообщение с описанием товара.",
-                reply_markup=authorized_keyboard
+                "Оформите заказ — просто напишите, что хотите."
             )
             return
-        
-        # Формируем сообщение со списком заказов
-        message_parts = [f"📋 Ваши заказы ({len(orders)}):\n"]
-        
-        keyboard_buttons = []
-        for order in orders[:10]:  # Показываем максимум 10 заказов
-            status_emoji = {
-                "new": "🆕",
-                "validated": "✅",
-                "invoice_created": "📄",
-                "paid": "💳",
-                "shipped": "📦",
-                "cancelled": "❌"
-            }.get(order.status, "❓")
-            
-            message_parts.append(
-                f"{status_emoji} {order.order_number}\n"
-                f"   Статус: {order.status}\n"
-                f"   Сумма: {order.total_amount:.2f}₽\n"
-                f"   Дата: {order.created_at[:10] if order.created_at else 'N/A'}\n"
-            )
-            
-            # Добавляем кнопку "Оплатить" для заказов со статусом invoice_created
-            if order.status == "invoice_created":
-                # Пробуем получить/создать платёжную ссылку
-                try:
-                    from src.api.payments import create_payment_token, _get_base_url
-                    _tok = create_payment_token(str(order.id))
-                    _pay_url = f"{_get_base_url()}/pay/{_tok}"
-                    keyboard_buttons.append([
-                        InlineKeyboardButton(
-                            f"💳 Оплатить {order.order_number}",
-                            url=_pay_url
-                        )
-                    ])
-                except Exception:
-                    keyboard_buttons.append([
-                        InlineKeyboardButton(
-                            f"💳 Оплатить {order.order_number}",
-                            callback_data=f"pay_order_{order.id}"
-                        )
-                    ])
-        
-        if len(orders) > 10:
-            message_parts.append(f"\n... и ещё {len(orders) - 10} заказов")
-        
-        message_parts.append("\n💡 Используйте Mini App для детального просмотра заказов.")
-        
-        # Используем InlineKeyboardMarkup для кнопок оплаты
-        # Постоянная клавиатура с кнопкой "Мои заказы" остается видимой внизу экрана
+
+        message_text, keyboard_buttons = _format_orders_list(orders)
         inline_keyboard = InlineKeyboardMarkup(keyboard_buttons) if keyboard_buttons else None
-        authorized_keyboard = get_authorized_keyboard()
-        
-        # Отправляем сообщение с inline-кнопками
-        # Постоянная клавиатура остается видимой автоматически
-        await update.message.reply_text(
-            "\n".join(message_parts), 
-            reply_markup=inline_keyboard
-        )
-        
+
+        await update.message.reply_text(message_text, reply_markup=inline_keyboard)
+
     except Exception as e:
         logger.error(f"Error in my_orders command: {e}", exc_info=True)
         await update.message.reply_text(
@@ -1052,6 +1085,75 @@ async def send_clarification_message(
         # Не поднимаем исключение, чтобы не прерывать обработку очереди
 
 
+def _build_invoice_caption(
+    order_number: str,
+    order_data: Dict[str, Any],
+    order_status: Optional[str],
+    invoice_number: Optional[str],
+    payment_url: Optional[str],
+) -> str:
+    """
+    Строит caption для PDF-счёта (≤ 1024 символа).
+    """
+    items_lines = []
+    total_items_cost = 0.0
+    for item in order_data.get("items", []):
+        qty        = item.get("quantity", 1)
+        price      = item.get("price_at_order", 0)
+        line_total = qty * price
+        total_items_cost += line_total
+        items_lines.append(f"  • {item.get('product_name','Н/Д')} — {qty} шт. × {price:,.0f}₽")
+
+    delivery_cost = order_data.get("delivery_cost", 0)
+    final_total   = total_items_cost + delivery_cost
+
+    lines = [f"✅ Заказ #{order_number} создан!", ""]
+
+    # Товары (обрезаем если слишком много)
+    lines.append("🛒 Состав:")
+    if len(items_lines) <= 5:
+        lines.extend(items_lines)
+    else:
+        lines.extend(items_lines[:4])
+        lines.append(f"  … и ещё {len(items_lines) - 4} поз.")
+    lines.append("")
+
+    lines.append(f"📦 Товары: {total_items_cost:,.0f}₽")
+    if delivery_cost > 0:
+        lines.append(f"🚚 Доставка: {delivery_cost:,.0f}₽")
+    lines.append(f"💰 Итого: {final_total:,.0f}₽")
+    lines.append("")
+
+    # Контакты
+    if order_data.get("customer_name"):
+        lines.append(f"👤 {order_data['customer_name']}")
+    if order_data.get("customer_phone"):
+        lines.append(f"📞 {order_data['customer_phone']}")
+    if order_data.get("customer_address"):
+        addr = order_data["customer_address"]
+        if len(addr) > 60:
+            addr = addr[:57] + "…"
+        lines.append(f"📍 {addr}")
+    lines.append("")
+
+    # Инструкция по оплате
+    if (order_status == "invoice_created" or invoice_number) and payment_url:
+        is_local = any(x in payment_url for x in ("localhost", "127.0.0.1", "0.0.0.0"))
+        if is_local:
+            lines.append(f"💳 Ссылка для оплаты:\n{payment_url}")
+        else:
+            lines.append("💳 Нажмите кнопку ниже для оплаты.")
+        lines.append("🔒 Ссылка действует 24 часа.")
+    elif order_status == "invoice_created" or invoice_number:
+        lines.append("💳 Нажмите кнопку оплаты ниже.")
+
+    caption = "\n".join(lines)
+    # Telegram ограничение caption — 1024 символа
+    if len(caption) > 1020:
+        caption = caption[:1017] + "…"
+    return caption
+
+
 async def send_order_confirmation(
     telegram_user_id: int,
     order_number: str,
@@ -1064,6 +1166,9 @@ async def send_order_confirmation(
     """
     Отправка подтверждения заказа пользователю в Telegram.
 
+    Если есть PDF счёт — отправляет ОДИН документ с подробным caption и кнопками.
+    Если PDF ещё не готов — отправляет текстовое сообщение.
+
     Args:
         telegram_user_id: ID пользователя Telegram
         order_number: Номер заказа
@@ -1071,182 +1176,229 @@ async def send_order_confirmation(
         order_status: Текущий статус заказа
         invoice_number: Номер счёта (если уже создан)
         order_id: UUID заказа в БД
+        payment_url: Ссылка на страницу оплаты
     """
     try:
         bot = get_bot_instance()
         circuit_breaker = get_telegram_circuit_breaker()
 
-        # ── Список товаров ──────────────────────────────────────────────────────
-        items_lines = []
-        total_items_cost = 0.0
-        for item in order_data.get("items", []):
-            qty   = item.get("quantity", 1)
-            price = item.get("price_at_order", 0)
-            line_total = qty * price
-            total_items_cost += line_total
-            items_lines.append(
-                f"  • {item.get('product_name', 'Н/Д')} — {qty} шт. × {price:,.0f}₽ = {line_total:,.0f}₽"
-            )
-
-        delivery_cost = order_data.get("delivery_cost", 0)
-        final_total   = total_items_cost + delivery_cost
-
-        # ── Сборка текста ───────────────────────────────────────────────────────
-        lines = [
-            f"✅ Заказ #{order_number} создан!\n",
-            "🛒 Состав заказа:",
-        ]
-        lines.extend(items_lines)
-        lines.append("")
-        lines.append(f"📦 Товары: {total_items_cost:,.0f}₽")
-        if delivery_cost > 0:
-            lines.append(f"🚚 Доставка: {delivery_cost:,.0f}₽")
-        lines.append(f"💰 Итого: {final_total:,.0f}₽\n")
-
-        # Контакты
-        if order_data.get("customer_name") or order_data.get("customer_phone") or order_data.get("customer_address"):
-            lines.append("👤 Данные получателя:")
-            if order_data.get("customer_name"):
-                lines.append(f"  Имя: {order_data['customer_name']}")
-            if order_data.get("customer_phone"):
-                lines.append(f"  Тел: {order_data['customer_phone']}")
-            if order_data.get("customer_address"):
-                lines.append(f"  Адрес: {order_data['customer_address']}")
-            lines.append("")
-
-        # Статусное сообщение и инструкции
+        # ── Inline-кнопки ────────────────────────────────────────────────────
         keyboard_buttons = []
 
-        if order_status == "invoice_created" or invoice_number:
-            lines.append("📄 Счёт на оплату готов!")
-            if invoice_number:
-                lines.append(f"  Номер счёта: {invoice_number}")
-            lines.append("")
-            if payment_url:
-                # Всегда включаем ссылку в текст сообщения (работает с любым URL включая localhost)
-                lines.append(f"💳 Оплатить онлайн: {payment_url}")
-                lines.append("🔒 Ссылка действительна 24 часа.")
-                lines.append("")
-                # URL-кнопка работает только с публичными URL (не localhost/127.0.0.1)
-                is_local_url = (
-                    "localhost" in payment_url
-                    or "127.0.0.1" in payment_url
-                    or "0.0.0.0" in payment_url
-                )
-                if not is_local_url:
-                    keyboard_buttons.append([
-                        InlineKeyboardButton("💳 Оплатить онлайн", url=payment_url)
-                    ])
-                else:
-                    # Для localhost используем callback-кнопку (ссылка уже есть в тексте)
-                    keyboard_buttons.append([
-                        InlineKeyboardButton("💳 Перейти к оплате ↑", callback_data=f"pay_order_{order_id or order_number}")
-                    ])
-            else:
-                lines.append("💳 Для оплаты откройте «Мои заказы».")
+        has_invoice = (order_status == "invoice_created" or bool(invoice_number))
+
+        if has_invoice and payment_url:
+            is_local = any(x in payment_url for x in ("localhost", "127.0.0.1", "0.0.0.0"))
+            if is_local:
                 keyboard_buttons.append([
-                    InlineKeyboardButton("💳 Оплатить заказ", callback_data=f"pay_order_{order_id or order_number}")
+                    InlineKeyboardButton("💳 Открыть форму оплаты", callback_data=f"pay_order_{order_id or order_number}")
                 ])
-        elif order_status == "paid":
-            lines.append("✅ Оплата подтверждена!")
-            lines.append("📦 Заказ передан в обработку. Вы получите трек-номер для отслеживания.")
-        elif order_status in ("order_created_1c", "tracking_issued", "shipped"):
-            lines.append("✅ Заказ оплачен и оформлен в обработку.")
-        else:
-            lines.append("⏳ Счёт на оплату будет сгенерирован в ближайшее время.")
-            lines.append("Вы получите уведомление, как только он будет готов.")
+            else:
+                keyboard_buttons.append([
+                    InlineKeyboardButton("💳 Оплатить онлайн", url=payment_url)
+                ])
+        elif has_invoice:
+            keyboard_buttons.append([
+                InlineKeyboardButton("💳 Оплатить заказ", callback_data=f"pay_order_{order_id or order_number}")
+            ])
 
-        keyboard_buttons.append([
-            InlineKeyboardButton("📋 Мои заказы", callback_data="show_my_orders")
-        ])
-        keyboard_buttons.append([
-            InlineKeyboardButton("❌ Отменить заказ", callback_data=f"cancel_order_{order_number}")
-        ])
+        # Кнопка "Отменить" только пока заказ не оплачен
+        if order_status not in ("paid", "order_created_1c", "tracking_issued", "shipped"):
+            keyboard_buttons.append([
+                InlineKeyboardButton("❌ Отменить заказ", callback_data=f"cancel_order_{order_number}")
+            ])
 
-        message_text  = "\n".join(lines)
-        reply_markup  = InlineKeyboardMarkup(keyboard_buttons)
+        reply_markup = InlineKeyboardMarkup(keyboard_buttons) if keyboard_buttons else None
 
-        async def _send():
-            return await _send_message_with_retry(bot, telegram_user_id, message_text, reply_markup=reply_markup)
+        # ── Пытаемся отправить PDF с caption ─────────────────────────────────
+        pdf_order_id = order_id or order_data.get("order_id") or order_data.get("id")
+        pdf_sent = False
 
-        try:
-            await circuit_breaker.call(_send)
-            logger.info(f"Sent order confirmation to Telegram user {telegram_user_id} for order {order_number}")
-        except Exception as send_err:
-            # Fallback: если кнопки вызвали ошибку — отправляем сообщение без кнопок
-            logger.warning(
-                f"Failed to send order confirmation with keyboard to {telegram_user_id}: {send_err}. "
-                f"Retrying without inline keyboard..."
-            )
+        if has_invoice and pdf_order_id:
+            pdf_path = PROJECT_ROOT / ".tmp" / "invoices" / f"{pdf_order_id}.pdf"
+            if pdf_path.exists():
+                caption = _build_invoice_caption(
+                    order_number, order_data, order_status, invoice_number, payment_url
+                )
+                try:
+                    async def _send_pdf():
+                        with open(pdf_path, "rb") as pdf_file:
+                            return await bot.send_document(
+                                chat_id=telegram_user_id,
+                                document=pdf_file,
+                                filename=f"Счёт_{invoice_number or order_number}.pdf",
+                                caption=caption,
+                                reply_markup=reply_markup,
+                            )
+
+                    sent_msg = await circuit_breaker.call(_send_pdf)
+                    pdf_sent = True
+                    logger.info(f"Sent invoice PDF+caption to user {telegram_user_id} for order {order_number}")
+
+                    # Сохраняем message_id для последующего снятия кнопок после оплаты
+                    if pdf_order_id and sent_msg:
+                        _store_invoice_message_id(pdf_order_id, telegram_user_id, sent_msg.message_id)
+
+                except Exception as e:
+                    logger.warning(f"Failed to send invoice PDF for {order_number}: {e}")
+            else:
+                logger.warning(f"Invoice PDF not found at {pdf_path} for order {order_number}")
+
+        # ── Fallback: текстовое сообщение если PDF не отправлен ──────────────
+        if not pdf_sent:
+            items_lines = []
+            total_items_cost = 0.0
+            for item in order_data.get("items", []):
+                qty        = item.get("quantity", 1)
+                price      = item.get("price_at_order", 0)
+                line_total = qty * price
+                total_items_cost += line_total
+                items_lines.append(
+                    f"  • {item.get('product_name', 'Н/Д')} — {qty} шт. × {price:,.0f}₽ = {line_total:,.0f}₽"
+                )
+
+            delivery_cost = order_data.get("delivery_cost", 0)
+            final_total   = total_items_cost + delivery_cost
+
+            lines = [f"✅ Заказ #{order_number} создан!\n", "🛒 Состав заказа:"]
+            lines.extend(items_lines)
+            lines += [
+                "",
+                f"📦 Товары: {total_items_cost:,.0f}₽",
+            ]
+            if delivery_cost > 0:
+                lines.append(f"🚚 Доставка: {delivery_cost:,.0f}₽")
+            lines.append(f"💰 Итого: {final_total:,.0f}₽\n")
+
+            if order_data.get("customer_name") or order_data.get("customer_phone") or order_data.get("customer_address"):
+                lines.append("👤 Данные получателя:")
+                if order_data.get("customer_name"):
+                    lines.append(f"  Имя: {order_data['customer_name']}")
+                if order_data.get("customer_phone"):
+                    lines.append(f"  Тел: {order_data['customer_phone']}")
+                if order_data.get("customer_address"):
+                    lines.append(f"  Адрес: {order_data['customer_address']}")
+                lines.append("")
+
+            if has_invoice:
+                if invoice_number:
+                    lines.append(f"📄 Счёт #{invoice_number} готов к оплате!")
+                if payment_url:
+                    is_local = any(x in payment_url for x in ("localhost", "127.0.0.1", "0.0.0.0"))
+                    if is_local:
+                        lines.append(f"\n💳 Ссылка для оплаты:\n{payment_url}")
+                    lines.append("🔒 Ссылка действует 24 часа.")
+            elif order_status == "paid":
+                lines.append("✅ Оплата подтверждена! Готовим заказ к отправке.")
+            else:
+                lines.append("⏳ Счёт будет сформирован в ближайшее время.")
+
+            message_text = "\n".join(lines)
+
+            async def _send_text():
+                return await _send_message_with_retry(
+                    bot, telegram_user_id, message_text, reply_markup=reply_markup
+                )
+
             try:
-                await _send_message_with_retry(bot, telegram_user_id, message_text)
-                logger.info(
-                    f"Sent order confirmation (no keyboard fallback) to Telegram user {telegram_user_id} for order {order_number}"
-                )
-            except Exception as fallback_err:
-                logger.error(
-                    f"Failed to send order confirmation (fallback) to {telegram_user_id}: {fallback_err}",
-                    exc_info=True
-                )
-                raise
-
-        # ── Отправка PDF счёта ──────────────────────────────────────────────────
-        if order_status == "invoice_created" or invoice_number:
-            pdf_order_id = order_id or order_data.get("order_id") or order_data.get("id")
-            if pdf_order_id:
-                pdf_path = PROJECT_ROOT / ".tmp" / "invoices" / f"{pdf_order_id}.pdf"
-                if pdf_path.exists():
-                    try:
-                        async def _send_pdf():
-                            with open(pdf_path, "rb") as pdf_file:
-                                return await bot.send_document(
-                                    chat_id=telegram_user_id,
-                                    document=pdf_file,
-                                    filename=f"Счет_{invoice_number or order_number}.pdf",
-                                    caption=(
-                                        f"📄 Счёт на оплату заказа {order_number}\n\n"
-                                        + (f"💳 Оплатить онлайн: {payment_url}\n\n" if payment_url else "")
-                                        + "Или используйте кнопку «Оплатить онлайн» в предыдущем сообщении."
-                                    )
-                                )
-                        await circuit_breaker.call(_send_pdf)
-                        logger.info(f"Sent invoice PDF to user {telegram_user_id} for order {order_number}")
-                    except Exception as e:
-                        logger.warning(f"Failed to send invoice PDF for {order_number}: {e}")
-                else:
-                    logger.warning(f"Invoice PDF not found at {pdf_path} for order {order_number}")
+                sent_msg = await circuit_breaker.call(_send_text)
+                logger.info(f"Sent text order confirmation to {telegram_user_id} for order {order_number}")
+                if pdf_order_id and sent_msg:
+                    _store_invoice_message_id(pdf_order_id, telegram_user_id, sent_msg.message_id)
+            except Exception as send_err:
+                logger.warning(f"Failed to send with keyboard: {send_err}. Retrying without...")
+                try:
+                    await _send_message_with_retry(bot, telegram_user_id, message_text)
+                except Exception as fallback_err:
+                    logger.error(f"Failed to send order confirmation (fallback): {fallback_err}", exc_info=True)
+                    raise
 
     except Exception as e:
         logger.error(f"Failed to send order confirmation to {telegram_user_id}: {e}", exc_info=True)
 
 
+def _store_invoice_message_id(order_id: str, chat_id: int, message_id: int) -> None:
+    """Сохраняет message_id счёта в Redis для последующего редактирования после оплаты."""
+    try:
+        if redis_client:
+            key = f"tg_invoice_msg:{order_id}"
+            value = f"{chat_id}:{message_id}"
+            redis_client.setex(key, 48 * 3600, value)  # TTL 48 часов
+    except Exception as e:
+        logger.warning(f"Failed to store invoice message_id for order {order_id}: {e}")
+
+
+async def remove_payment_buttons(order_id: str, order_number: str) -> None:
+    """
+    Убирает кнопки «Оплатить» и «Отменить» из сообщения со счётом после оплаты.
+    Редактирует сообщение, заменяя кнопки на метку «✅ Оплачено».
+    """
+    try:
+        if not redis_client:
+            return
+        key = f"tg_invoice_msg:{order_id}"
+        value = redis_client.get(key)
+        if not value:
+            return
+        value_str = value.decode("utf-8") if isinstance(value, bytes) else value
+        parts = value_str.split(":")
+        if len(parts) != 2:
+            return
+        chat_id, message_id = int(parts[0]), int(parts[1])
+        bot = get_bot_instance()
+        paid_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"✅ Оплачен — {order_number}", callback_data="already_paid")]
+        ])
+        await bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=paid_markup,
+        )
+        redis_client.delete(key)
+        logger.info(f"Removed payment buttons from invoice message for order {order_id}")
+    except Exception as e:
+        logger.warning(f"Could not remove payment buttons for order {order_id}: {e}")
+
+
 async def send_tracking_notification(
     telegram_user_id: int,
     order_number: str,
-    tracking_number: str
+    tracking_number: str,
+    order_id: Optional[str] = None,
 ):
     """
-    Отправка уведомления о трек-номере пользователю в Telegram.
+    Отправка уведомления о присвоении трек-номера (tracking_issued).
+    Это автоматический шаг — трек присвоен, посылка формируется на складе.
 
     Args:
         telegram_user_id: ID пользователя Telegram
         order_number: Номер заказа
         tracking_number: Трек-номер для отслеживания
+        order_id: UUID заказа (для снятия кнопок оплаты)
     """
     try:
         bot = get_bot_instance()
         circuit_breaker = get_telegram_circuit_breaker()
 
+        # Снимаем кнопки оплаты с предыдущего сообщения
+        if order_id:
+            try:
+                await remove_payment_buttons(order_id, order_number)
+            except Exception:
+                pass
+
         message = (
-            f"🚚 Ваш заказ {order_number} отправлен!\n\n"
-            f"📦 Трек-номер для отслеживания:\n"
-            f"  {tracking_number}\n\n"
-            f"Вы можете отслеживать посылку по этому номеру.\n"
-            f"Спасибо за покупку!"
+            f"📦 Заказ #{order_number} готовится к отправке!\n\n"
+            f"Трек-номер присвоен:\n"
+            f"  <code>{tracking_number}</code>\n\n"
+            f"Как только посылка будет передана курьеру — вы получите уведомление.\n"
+            f"Трек-номер уже можно использовать для отслеживания на сайте транспортной компании."
         )
 
         async def _send():
-            return await _send_message_with_retry(bot, telegram_user_id, message)
+            return await _send_message_with_retry(
+                bot, telegram_user_id, message, parse_mode="HTML"
+            )
 
         await circuit_breaker.call(_send)
         logger.info(f"Sent tracking notification to user {telegram_user_id} for order {order_number}")
@@ -1260,45 +1412,145 @@ async def send_tracking_notification(
         logger.error(f"Failed to send tracking notification: {e}", exc_info=True)
 
 
-async def send_status_change_notification(
+async def send_shipped_notification(
     telegram_user_id: int,
     order_number: str,
-    old_status: str,
-    new_status: str
+    tracking_number: Optional[str] = None,
+    order_id: Optional[str] = None,
 ):
     """
-    Отправка уведомления об изменении статуса заказа пользователю в Telegram.
-    
+    Отправка уведомления о том, что посылка передана курьеру (shipped).
+    Это ручной шаг менеджера в дашборде — посылка физически отправлена.
+
     Args:
         telegram_user_id: ID пользователя Telegram
         order_number: Номер заказа
-        old_status: Старый статус
-        new_status: Новый статус
+        tracking_number: Трек-номер (если ещё не отправлялся)
+        order_id: UUID заказа
     """
     try:
         bot = get_bot_instance()
         circuit_breaker = get_telegram_circuit_breaker()
 
-        status_messages = {
-            "validated": "✅ Заказ проверен и подтвержден.",
-            "invoice_created": "📄 Счёт на оплату сформирован. Ожидается оплата.",
-            "paid": "💳 Оплата получена. Готовим к отправке.",
-            "order_created_1c": "📋 Заказ передан на склад.",
-            "tracking_issued": "🚚 Заказ отправлен! Трек-номер будет в следующем сообщении.",
-            "cancelled": "❌ Заказ отменён.",
-        }
+        lines = [
+            f"🚚 Заказ #{order_number} передан курьеру и уже в пути!",
+            "",
+            "Ожидайте доставку в ближайшие дни.",
+        ]
+        if tracking_number:
+            lines += [
+                "",
+                f"📦 Трек-номер для отслеживания:",
+                f"  <code>{tracking_number}</code>",
+            ]
+        lines += ["", "Спасибо, что выбрали нас! 🙏"]
 
-        text = (
-            f"📋 Статус заказа {order_number} изменён\n\n"
-            f"{status_messages.get(new_status, f'Статус: {new_status}')}\n\n"
-            f"Используйте /my_orders для просмотра деталей заказа."
-        )
+        message = "\n".join(lines)
+
+        async def _send():
+            return await _send_message_with_retry(
+                bot, telegram_user_id, message, parse_mode="HTML"
+            )
+
+        await circuit_breaker.call(_send)
+        logger.info(f"Sent shipped notification to user {telegram_user_id} for order {order_number}")
+
+    except BadRequest as e:
+        if "Chat not found" in str(e):
+            logger.warning(f"Chat not found for user {telegram_user_id} (shipped notification skipped)")
+            return
+        logger.error(f"Failed to send shipped notification (BadRequest): {e}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Failed to send shipped notification: {e}", exc_info=True)
+
+
+async def send_status_change_notification(
+    telegram_user_id: int,
+    order_number: str,
+    old_status: str,
+    new_status: str,
+    tracking_number: Optional[str] = None,
+    order_id: Optional[str] = None,
+):
+    """
+    Отправка уведомления об изменении статуса заказа пользователю в Telegram.
+
+    Args:
+        telegram_user_id: ID пользователя Telegram
+        order_number: Номер заказа
+        old_status: Старый статус
+        new_status: Новый статус
+        tracking_number: Трек-номер (для статусов tracking_issued/shipped)
+        order_id: UUID заказа (для снятия кнопок оплаты)
+    """
+    try:
+        bot = get_bot_instance()
+        circuit_breaker = get_telegram_circuit_breaker()
+
+        # Снимаем кнопки оплаты при переходе на paid или позже
+        if new_status in ("paid", "order_created_1c", "tracking_issued", "shipped") and order_id:
+            try:
+                await remove_payment_buttons(order_id, order_number)
+            except Exception:
+                pass
+
+        # Формируем текст уведомления
+        if new_status == "validated":
+            text = (
+                f"✅ Заказ #{order_number} подтверждён!\n\n"
+                f"Формируем счёт на оплату — он придёт в ближайшее время."
+            )
+        elif new_status == "invoice_created":
+            text = (
+                f"📄 Счёт на оплату по заказу #{order_number} готов!\n\n"
+                f"Нажмите «📋 Мои заказы» для оплаты."
+            )
+        elif new_status == "paid":
+            text = (
+                f"💳 Оплата по заказу #{order_number} подтверждена!\n\n"
+                f"Передаём заказ на склад — скоро отправим. 📦"
+            )
+        elif new_status == "order_created_1c":
+            text = (
+                f"📋 Заказ #{order_number} принят складом.\n\n"
+                f"Формируем посылку, скоро отправим!"
+            )
+        elif new_status == "tracking_issued":
+            # Автоматический шаг: трек присвоен, посылка на складе готовится
+            # Делегируем в специализированную функцию
+            await send_tracking_notification(
+                telegram_user_id=telegram_user_id,
+                order_number=order_number,
+                tracking_number=tracking_number or "—",
+                order_id=order_id,
+            )
+            return
+        elif new_status == "shipped":
+            # Ручной шаг менеджера: посылка физически передана курьеру
+            # Делегируем в специализированную функцию
+            await send_shipped_notification(
+                telegram_user_id=telegram_user_id,
+                order_number=order_number,
+                tracking_number=tracking_number,
+                order_id=order_id,
+            )
+            return
+        elif new_status == "cancelled":
+            text = (
+                f"❌ Заказ #{order_number} отменён.\n\n"
+                f"Если это ошибка — пожалуйста, свяжитесь с менеджером."
+            )
+        else:
+            text = (
+                f"ℹ️ Статус заказа #{order_number} обновлён.\n\n"
+                f"Нажмите «📋 Мои заказы» для деталей."
+            )
 
         async def _send():
             return await _send_message_with_retry(bot, telegram_user_id, text)
 
         await circuit_breaker.call(_send)
-        logger.info(f"Status change notification sent to {telegram_user_id}: {old_status} -> {new_status}")
+        logger.info(f"Status change notification sent to {telegram_user_id}: {old_status} → {new_status}")
 
     except Exception as e:
         logger.error(f"Failed to send status change notification: {e}", exc_info=True)
@@ -1380,17 +1632,6 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         try:
             from src.services.order_service import OrderService
 
-            STATUS_LABELS = {
-                "new": ("🆕", "Новый"),
-                "validated": ("✅", "Подтверждён"),
-                "invoice_created": ("📄", "Счёт создан"),
-                "paid": ("💳", "Оплачен"),
-                "order_created_1c": ("📋", "Передан на склад"),
-                "tracking_issued": ("🚚", "Отправлен"),
-                "shipped": ("📦", "В пути"),
-                "cancelled": ("❌", "Отменён"),
-            }
-
             # Получаем заказы по телефону (в отдельном потоке)
             orders = await asyncio.to_thread(OrderService.get_orders_by_phone, phone, user.id)
 
@@ -1401,36 +1642,9 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 )
                 return
 
-            # Формируем сообщение со списком заказов
-            message_parts = [f"📋 Ваши заказы ({len(orders)}):\n"]
-
-            keyboard_buttons = []
-            for order in orders[:10]:  # Показываем максимум 10 заказов
-                emoji, label = STATUS_LABELS.get(order.status, ("❓", order.status))
-                created = str(order.created_at)[:10] if order.created_at else "N/A"
-                message_parts.append(
-                    f"{emoji} {order.order_number}\n"
-                    f"   Статус: {label}\n"
-                    f"   Сумма: {order.total_amount:.2f}₽\n"
-                    f"   Дата: {created}\n"
-                )
-
-                # Кнопка "Оплатить" только для ожидающих оплаты
-                if order.status == "invoice_created":
-                    keyboard_buttons.append([
-                        InlineKeyboardButton(
-                            f"💳 Оплатить {order.order_number}",
-                            callback_data=f"pay_order_{order.id}"
-                        )
-                    ])
-
-            if len(orders) > 10:
-                message_parts.append(f"\n... и ещё {len(orders) - 10} заказов")
-
-            message_parts.append("\n💡 Для оплаты нажмите кнопку рядом с нужным заказом.")
-
+            message_text, keyboard_buttons = _format_orders_list(orders)
             reply_markup = InlineKeyboardMarkup(keyboard_buttons) if keyboard_buttons else None
-            await query.edit_message_text("\n".join(message_parts), reply_markup=reply_markup)
+            await query.edit_message_text(message_text, reply_markup=reply_markup)
 
         except Exception as e:
             logger.error(f"Error in show_my_orders callback: {e}", exc_info=True)
@@ -1564,9 +1778,13 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             logger.error(f"Error cancelling order: {e}", exc_info=True)
             await query.answer("❌ Произошла ошибка при отмене заказа.", show_alert=True)
     
+    elif callback_data == "already_paid":
+        # Нажатие на неактивную кнопку "✅ Оплачен"
+        await query.answer("Заказ уже оплачен.", show_alert=False)
+
     else:
         # Неизвестный callback
-        await query.edit_message_text("Неизвестная команда.")
+        await query.answer("Неизвестная команда.", show_alert=False)
 
 
 async def error_handler(update: Optional[Update], context: ContextTypes.DEFAULT_TYPE):
