@@ -1328,38 +1328,6 @@ def _store_invoice_message_id(order_id: str, chat_id: int, message_id: int) -> N
         logger.warning(f"Failed to store invoice message_id for order {order_id}: {e}")
 
 
-async def remove_payment_buttons(order_id: str, order_number: str) -> None:
-    """
-    Убирает кнопки «Оплатить» и «Отменить» из сообщения со счётом после оплаты.
-    Редактирует сообщение, заменяя кнопки на метку «✅ Оплачено».
-    """
-    try:
-        if not redis_client:
-            return
-        key = f"tg_invoice_msg:{order_id}"
-        value = redis_client.get(key)
-        if not value:
-            return
-        value_str = value.decode("utf-8") if isinstance(value, bytes) else value
-        parts = value_str.split(":")
-        if len(parts) != 2:
-            return
-        chat_id, message_id = int(parts[0]), int(parts[1])
-        bot = get_bot_instance()
-        paid_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"✅ Оплачен — {order_number}", callback_data="already_paid")]
-        ])
-        await bot.edit_message_reply_markup(
-            chat_id=chat_id,
-            message_id=message_id,
-            reply_markup=paid_markup,
-        )
-        redis_client.delete(key)
-        logger.info(f"Removed payment buttons from invoice message for order {order_id}")
-    except Exception as e:
-        logger.warning(f"Could not remove payment buttons for order {order_id}: {e}")
-
-
 async def send_tracking_notification(
     telegram_user_id: int,
     order_number: str,
@@ -1374,21 +1342,14 @@ async def send_tracking_notification(
         telegram_user_id: ID пользователя Telegram
         order_number: Номер заказа
         tracking_number: Трек-номер для отслеживания
-        order_id: UUID заказа (для снятия кнопок оплаты)
+        order_id: UUID заказа
     """
     try:
         bot = get_bot_instance()
         circuit_breaker = get_telegram_circuit_breaker()
 
-        # Снимаем кнопки оплаты с предыдущего сообщения
-        if order_id:
-            try:
-                await remove_payment_buttons(order_id, order_number)
-            except Exception:
-                pass
-
         message = (
-            f"📦 Заказ #{order_number} готовится к отправке!\n\n"
+            f"💳 Оплата поступила. Заказ #{order_number} готовится к отправке!\n\n"
             f"Трек-номер присвоен:\n"
             f"  <code>{tracking_number}</code>\n\n"
             f"Как только посылка будет передана курьеру — вы получите уведомление.\n"
@@ -1481,18 +1442,11 @@ async def send_status_change_notification(
         old_status: Старый статус
         new_status: Новый статус
         tracking_number: Трек-номер (для статусов tracking_issued/shipped)
-        order_id: UUID заказа (для снятия кнопок оплаты)
+        order_id: UUID заказа
     """
     try:
         bot = get_bot_instance()
         circuit_breaker = get_telegram_circuit_breaker()
-
-        # Снимаем кнопки оплаты при переходе на paid или позже
-        if new_status in ("paid", "order_created_1c", "tracking_issued", "shipped") and order_id:
-            try:
-                await remove_payment_buttons(order_id, order_number)
-            except Exception:
-                pass
 
         # Формируем текст уведомления
         if new_status == "validated":
